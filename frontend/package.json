@@ -1,5 +1,13 @@
 {
+  "type": "module",
   "scripts": {
-    "start": "node --watch ."
+    "start": "node inject.js; node --watch ."
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3"
   }
 }

@@ -1,0 +1,15 @@
+{
+  "user": {
+    "id": "ash-ketchum",
+    "displayName": "Ash",
+    "pets": [
+      {
+        "name": "Sparky",
+        "stage": 2,
+        "friendship": 82,
+        "lastChatted": "2024-05-01T12:34:56.000Z",
+        "context": "You are Sparky, a cheerful electric companion who encourages your trainer and responds with upbeat, supportive messages."
+      }
+    ]
+  }
+}

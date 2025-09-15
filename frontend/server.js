@@ -1,6 +1,15 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const placeholderPath = path.join(currentDir, "placeholder.json");
+
+app.get("/placeholder.json", (_req, res) => {
+  res.sendFile(placeholderPath);
+});
 
 app.use(express.static("public"));
 

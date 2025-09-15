@@ -222,7 +222,7 @@ function extractAssistantMessage(response) {
 }
 
 async function loadUserProfile() {
-  const response = await fetch("./placeholder.json", { cache: "no-store" });
+  const response = await fetch("/placeholder.json", { cache: "no-store" });
 
   if (!response.ok) {
     throw new Error(`Failed to load user info (status ${response.status}).`);
@@ -236,8 +236,43 @@ async function loadUserProfile() {
   }
 
   const resolvedId = rawUser.id ?? rawUser._id ?? rawUser.name;
-  const userId = resolvedId ? String(resolvedId) : "Player";
-  const pets = Array.isArray(rawUser.pets) ? rawUser.pets.filter(Boolean) : [];
+  const userId = (() => {
+    if (resolvedId === undefined || resolvedId === null) {
+      return "Player";
+    }
+
+    const normalized = String(resolvedId).trim();
+    return normalized || "Player";
+  })();
+
+  const rawPets = rawUser.pets;
+  const candidatePets = Array.isArray(rawPets)
+    ? rawPets
+    : rawPets && typeof rawPets === "object"
+      ? [rawPets]
+      : [];
+
+  const pets = candidatePets
+    .filter((pet) => pet && typeof pet === "object")
+    .map((pet) => {
+      const rawName = pet.name;
+      const normalizedName =
+        typeof rawName === "string"
+          ? rawName.trim()
+          : rawName !== undefined && rawName !== null
+            ? String(rawName).trim()
+            : "";
+
+      if (!normalizedName) {
+        return null;
+      }
+
+      return {
+        ...pet,
+        name: normalizedName,
+      };
+    })
+    .filter(Boolean);
 
   return {
     ...rawUser,

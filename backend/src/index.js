@@ -3,11 +3,13 @@ import cors from "cors";
 import mongoose from "mongoose";
 import userRouter from "./user/userRouter.js"
 import "dotenv/config";
+import { chat } from "./chat";
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
+app.post("/chat", chat)
 
 app.use("/users", userRouter);
 

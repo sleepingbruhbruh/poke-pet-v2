@@ -251,6 +251,7 @@ function selectActivePet(user) {
 }
 
 function buildChatUI({ user, pet, backendURL }) {
+
   const chatBox = createElement("div", { className: "chat-box" });
 
   const inputField = createElement("input", {

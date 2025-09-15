@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node inject.js; node --watch ."
+    "prestart": "node inject.js",
+    "start": "node --watch ."
   },
   "dependencies": {
     "dotenv": "^17.2.2",

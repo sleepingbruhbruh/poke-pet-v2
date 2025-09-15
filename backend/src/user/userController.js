@@ -14,7 +14,7 @@ export const getUser = async (req, res) => {
   const { name } = req.params;
   const user = await User.findById(name);
 
-  res.status(200).send(user);
+  res.status(200).json(user);
 };
 
 /** @type {import("express").RequestHandler} */

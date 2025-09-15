@@ -1,4 +1,4 @@
-const deepseekBaseURL = "https://api.deepseek.com/v1/chat/completions";
+const deepseekBaseURL = "https://openrouter.ai/api/v1/chat/completions";
 
 function normalizeMessages(rawMessages) {
   if (!Array.isArray(rawMessages)) {
@@ -90,7 +90,7 @@ export const chat = async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek/deepseek-chat-v3.1:free",
         messages: normalizedMessages,
         max_tokens: 300,
         temperature: 0.7,

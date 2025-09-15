@@ -19,6 +19,25 @@
       border-radius: 14px;
       width: 350px;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .chat-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .chat-header-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .chat-header-subtitle {
+      font-size: 13px;
+      color: #555;
     }
 
     .chat-box {
@@ -27,7 +46,6 @@
       border-radius: 10px;
       padding: 15px;
       overflow-y: auto;
-      margin-bottom: 15px;
     }
 
     .message {
@@ -56,4 +74,18 @@
       border: none;
       font-size: 16px;
       cursor: pointer;
+    }
+
+    .input-area button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      background-color: #ffe5e5;
+      color: #a30000;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-family: sans-serif;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }

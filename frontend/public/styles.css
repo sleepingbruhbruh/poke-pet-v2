@@ -126,6 +126,17 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+.prompt-runaway-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.prompt-runaway-button {
+  width: 96px;
+  height: 96px;
+  font-size: 28px;
+}
+
 .prompt-submit-button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);

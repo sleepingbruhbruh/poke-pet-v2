@@ -247,6 +247,58 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
+function createNetworkError(message, cause) {
+  const fallbackMessage = typeof message === "string" && message.trim()
+    ? message.trim()
+    : "A network error occurred.";
+  const error = new Error(fallbackMessage);
+
+  error.status = 0;
+
+  if (cause !== undefined) {
+    error.cause = cause;
+  }
+
+  return error;
+}
+
+function resolveErrorMessage(error, fallbackMessage, networkFallbackMessage = fallbackMessage) {
+  const fallback = typeof fallbackMessage === "string" && fallbackMessage.trim()
+    ? fallbackMessage.trim()
+    : "Something went wrong.";
+  const networkFallback = typeof networkFallbackMessage === "string" && networkFallbackMessage.trim()
+    ? networkFallbackMessage.trim()
+    : fallback;
+
+  if (error instanceof Error) {
+    if (Number(error.status) === 0) {
+      return networkFallback;
+    }
+
+    const trimmed = typeof error.message === "string" ? error.message.trim() : "";
+
+    if (trimmed) {
+      return trimmed;
+    }
+
+    return fallback;
+  }
+
+  if (error && typeof error === "object") {
+    if (Number(error.status) === 0) {
+      return networkFallback;
+    }
+
+    const message = typeof error.message === "string" ? error.message.trim() : "";
+
+    if (message) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 async function readResponseMessage(response, fallbackMessage = "") {
   const fallback = typeof fallbackMessage === "string" ? fallbackMessage : "";
   const rawText = await response.text().catch(() => "");
@@ -330,16 +382,23 @@ function normalizeUserRecord(rawUser) {
 async function fetchUserRecord(backendURL, username) {
   const base = backendURL.replace(/\/$/, "");
   const encoded = encodeURIComponent(username);
-  const response = await fetch(`${base}/users/${encoded}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  let response;
+
+  try {
+    response = await fetch(`${base}/users/${encoded}`, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to reach the trainer service. Please check your connection and try again.",
+      networkError,
+    );
+  }
 
   if (response.status === 404) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
+    return null;
   }
 
   if (!response.ok) {
@@ -353,12 +412,25 @@ async function fetchUserRecord(backendURL, username) {
   const payload = await response.json().catch(() => null);
 
   if (!payload) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
+    return null;
   }
 
-  return normalizeUserRecord(payload);
+  try {
+    return normalizeUserRecord(payload);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (typeof error.status !== "number") {
+        error.status = 500;
+      }
+
+      throw error;
+    }
+
+    const normalizationError = new Error("Trainer data returned by the server is invalid.");
+    normalizationError.status = 500;
+    normalizationError.cause = error;
+    throw normalizationError;
+  }
 }
 
 async function createUserRecord(backendURL, username, petName) {
@@ -366,14 +438,23 @@ async function createUserRecord(backendURL, username, petName) {
   const trainerId = sanitizeIdentifier(username);
   const companionName = sanitizeIdentifier(petName);
 
-  const response = await fetch(`${base}/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ name: trainerId, petName: companionName }),
-  });
+  let response;
+
+  try {
+    response = await fetch(`${base}/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ name: trainerId, petName: companionName }),
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to reach the trainer service to save your Pokémon. Please check your connection and try again.",
+      networkError,
+    );
+  }
 
   if (response.status === 409) {
     const existing = await response.json().catch(() => null);
@@ -393,7 +474,26 @@ async function createUserRecord(backendURL, username, petName) {
 
   const created = await response.json().catch(() => null);
 
-  return created ? normalizeUserRecord(created) : null;
+  if (!created) {
+    return null;
+  }
+
+  try {
+    return normalizeUserRecord(created);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (typeof error.status !== "number") {
+        error.status = 500;
+      }
+
+      throw error;
+    }
+
+    const normalizationError = new Error("Trainer data returned by the server is invalid.");
+    normalizationError.status = 500;
+    normalizationError.cause = error;
+    throw normalizationError;
+  }
 }
 
 function renderInputPrompt(appRoot, options) {
@@ -561,7 +661,11 @@ async function handleUserCreation(appRoot, backendURL, username) {
     errorMessage = "";
 
     try {
-      await createUserRecord(backendURL, username, petName);
+      const createdUser = await createUserRecord(backendURL, username, petName);
+
+      if (createdUser) {
+        return createdUser;
+      }
     } catch (error) {
       if (error && error.status === 409) {
         if (error.payload) {
@@ -573,30 +677,47 @@ async function handleUserCreation(appRoot, backendURL, username) {
         }
 
         try {
-          return await fetchUserRecord(backendURL, username);
+          const existingUser = await fetchUserRecord(backendURL, username);
+
+          if (existingUser) {
+            return existingUser;
+          }
+
+          errorMessage = "We couldn't load your trainer. Please try again.";
         } catch (fetchError) {
-          errorMessage =
-            fetchError instanceof Error && fetchError.message
-              ? fetchError.message
-              : "We couldn't load your trainer. Please try again.";
+          errorMessage = resolveErrorMessage(
+            fetchError,
+            "We couldn't load your trainer. Please try again.",
+            "We couldn't load your trainer due to a network issue. Please check your connection and try again.",
+          );
           continue;
         }
+
+        continue;
       }
 
-      errorMessage =
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to create your Pokémon. Please try again.";
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to create your Pokémon. Please try again.",
+        "We couldn't reach the server to create your Pokémon. Please check your connection and try again.",
+      );
       continue;
     }
 
     try {
-      return await fetchUserRecord(backendURL, username);
+      const createdUser = await fetchUserRecord(backendURL, username);
+
+      if (createdUser) {
+        return createdUser;
+      }
+
+      errorMessage = "We couldn't load your trainer. Please try again.";
     } catch (fetchError) {
-      errorMessage =
-        fetchError instanceof Error && fetchError.message
-          ? fetchError.message
-          : "We couldn't load your trainer. Please try again.";
+      errorMessage = resolveErrorMessage(
+        fetchError,
+        "We couldn't load your trainer. Please try again.",
+        "We couldn't load your trainer due to a network issue. Please check your connection and try again.",
+      );
     }
   }
 }
@@ -609,30 +730,37 @@ async function bootstrapUserSelection(appRoot, backendURL) {
     username = await promptForUsername(appRoot, { initialValue: username, errorMessage });
     errorMessage = "";
 
+    let existingUser;
+
     try {
-      return await fetchUserRecord(backendURL, username);
+      existingUser = await fetchUserRecord(backendURL, username);
     } catch (error) {
-      if (error && error.status === 404) {
-        try {
-          const createdUser = await handleUserCreation(appRoot, backendURL, username);
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to look up that trainer. Please try again.",
+        "We couldn't connect to the trainer service. Please check your connection and try again.",
+      );
+      continue;
+    }
 
-          if (createdUser) {
-            return createdUser;
-          }
+    if (existingUser) {
+      return existingUser;
+    }
 
-          errorMessage = "We couldn't create the trainer. Please try again.";
-        } catch (creationError) {
-          errorMessage =
-            creationError instanceof Error && creationError.message
-              ? creationError.message
-              : "We couldn't create the trainer. Please try again.";
-        }
-      } else {
-        errorMessage =
-          error instanceof Error && error.message
-            ? error.message
-            : "Unable to look up that trainer. Please try again.";
+    try {
+      const createdUser = await handleUserCreation(appRoot, backendURL, username);
+
+      if (createdUser) {
+        return createdUser;
       }
+
+      errorMessage = "We couldn't create the trainer. Please try again.";
+    } catch (creationError) {
+      errorMessage = resolveErrorMessage(
+        creationError,
+        "We couldn't create the trainer. Please try again.",
+        "We couldn't reach the server to create the trainer. Please check your connection and try again.",
+      );
     }
   }
 }

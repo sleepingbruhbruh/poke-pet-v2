@@ -48,8 +48,49 @@ async function initApp() {
     console.error("Failed to apply pet adjustments:", error);
   }
 
-  const activePet = adjustmentResult.pet ?? selectActivePet(user);
-  const evolutionDetail = adjustmentResult.evolution ?? null;
+  let activePet = adjustmentResult.pet ?? selectActivePet(user);
+  let evolutionDetail = adjustmentResult.evolution ?? null;
+  let pendingMessages = Array.isArray(adjustmentResult.messages)
+    ? adjustmentResult.messages
+    : [];
+
+  if (!activePet) {
+    try {
+      const refreshedUser = await promptForExistingTrainerPet(appRoot, backendURL, user.id);
+      storeCachedUsername(refreshedUser.id ?? user.id);
+      user = refreshedUser;
+      activePet = selectActivePet(user);
+      evolutionDetail = null;
+      pendingMessages = [];
+    } catch (error) {
+      console.error("Failed to create a new Pokémon for this trainer:", error);
+      const fallbackMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't create a Pokémon for you. Please try again.";
+
+      appRoot.innerHTML = "";
+      appRoot.appendChild(
+        createElement("div", {
+          className: "error-message",
+          textContent: fallbackMessage,
+        }),
+      );
+      return;
+    }
+
+    if (!activePet) {
+      console.error("Trainer record was refreshed but still has no Pokémon attached.");
+      appRoot.innerHTML = "";
+      appRoot.appendChild(
+        createElement("div", {
+          className: "error-message",
+          textContent: "We couldn't link a Pokémon to this trainer. Please try again.",
+        }),
+      );
+      return;
+    }
+  }
 
   async function handlePetRelease() {
     const currentPet = activePet ?? selectActivePet(user);
@@ -132,7 +173,7 @@ async function initApp() {
     message: `You are chatting as ${user.id}. ${introMessage}`,
   });
 
-  adjustmentResult.messages
+  pendingMessages
     .filter((entry) => entry && typeof entry.message === "string" && entry.message.trim())
     .forEach((entry) => {
       const senderLabel = sanitizeIdentifier(entry.sender, "System");

@@ -36,6 +36,7 @@ export const createUser = async (req, res) => {
     pets: [
       {
         name: sanitizedPetName,
+        "talking-streak": 0,
       },
     ],
   });

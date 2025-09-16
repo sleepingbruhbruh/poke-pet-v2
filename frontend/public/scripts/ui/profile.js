@@ -74,12 +74,9 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
   const activePet = pet ?? selectActivePet(user);
   const stageDetail = getStageDetail(activePet?.stage);
   const activePetId = sanitizeIdentifier(activePet?._id ?? activePet?.id, "");
-
-  const evolutionPetId =
-    evolution && typeof evolution.petId === "string" && evolution.petId.trim()
-      ? evolution.petId.trim()
-      : "";
-  const shouldShowEvolution = Boolean(activePet && activePetId && evolutionPetId && activePetId === evolutionPetId);
+  const evolutionPetId = sanitizeIdentifier(evolution?.petId, "");
+  const shouldShowEvolution =
+    Boolean(activePet && evolution) && (!activePetId || !evolutionPetId || activePetId === evolutionPetId);
 
   const petName =
     activePet && typeof activePet.name === "string" && activePet.name.trim()
@@ -175,12 +172,20 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
         ? evolution.postImage
         : stageDetail.image;
 
-    setTimeout(() => {
+    const runEvolutionSequence = () => {
       window.alert("Your Pokemon is evolving!?");
       window.alert(`Congratulations, your pokemon has evolved into ${postSpecies}`);
       avatar.setAttribute("src", postImage);
       avatar.setAttribute("alt", `${postSpecies} avatar`);
-    }, 0);
+    };
+
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(runEvolutionSequence, 0);
+      });
+    } else {
+      window.setTimeout(runEvolutionSequence, 0);
+    }
   }
 
   return column;

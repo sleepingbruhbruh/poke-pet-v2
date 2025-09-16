@@ -7,7 +7,7 @@ import { resolveBackendURL, deleteTrainerPet } from "./services/api.js";
 import { displayMessages, resetState } from "./state.js";
 import { sanitizeIdentifier } from "./utils.js";
 import { showRunAwayPrompt } from "./ui/prompts.js";
-import { storeCachedUsername } from "./storage.js";
+import { clearCachedUsername, storeCachedUsername } from "./storage.js";
 
 async function initApp() {
   const appRoot = document.querySelector("#app");
@@ -112,6 +112,17 @@ async function initApp() {
     }
   }
 
+  async function handleLogout() {
+    clearCachedUsername();
+
+    try {
+      await initApp();
+    } catch (error) {
+      console.error("Failed to return to the trainer selection screen:", error);
+      throw error;
+    }
+  }
+
   const introMessage = activePet
     ? `${activePet.name} perks up, ready to chat.`
     : "No pets are currently linked to this trainer.";
@@ -134,6 +145,7 @@ async function initApp() {
     backendURL,
     evolution: evolutionDetail,
     onPetReleased: handlePetRelease,
+    onLogout: handleLogout,
   });
 
   appRoot.innerHTML = "";

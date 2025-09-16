@@ -251,6 +251,7 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
+
 function loadCachedUsername() {
   if (typeof localStorage === "undefined") {
     return "";
@@ -1103,8 +1104,8 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       continue;
     }
 
-    if (existingUser) {
-      storeCachedUsername(existingUser.id ?? username);
+    if (existingUser) 
+      storeCachedUsername(existingUser.id ?? username);n
       return existingUser;
     }
 

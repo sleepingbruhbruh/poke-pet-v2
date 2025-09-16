@@ -132,9 +132,9 @@ body {
 }
 
 .prompt-runaway-button {
-  width: 96px;
-  height: 96px;
-  font-size: 28px;
+  width: 72px;
+  height: 72px;
+  font-size: 21px;
 }
 
 .prompt-submit-button:hover:not(:disabled) {

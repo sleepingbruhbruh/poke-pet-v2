@@ -1,12 +1,6 @@
 import { createElement } from "../dom.js";
 import { getStageDetail, selectActivePet } from "../pets.js";
-import {
-  clampFriendship,
-  getFriendshipTier,
-  getTalkingStreakValue,
-  sanitizeIdentifier,
-} from "../utils.js";
-import { showEvolutionSequence } from "./prompts.js";
+import { clampFriendship, getTalkingStreakValue, sanitizeIdentifier } from "../utils.js";
 
 function createInfoRow(label, value, options = {}) {
   const { valueAttributes = {} } = options;
@@ -45,9 +39,6 @@ function buildFriendshipSection(friendshipValue) {
     attributes: { "data-info": "friendship-progress" },
   });
   fill.style.width = `${clampedValue}%`;
-  const tier = getFriendshipTier(clampedValue);
-  fill.classList.add(`friendship-bar-fill--${tier}`);
-  fill.dataset.friendshipTier = tier;
   bar.appendChild(fill);
   wrapper.appendChild(header);
   wrapper.appendChild(bar);
@@ -170,7 +161,7 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
     }),
   );
 
-  if (shouldShowEvolution && typeof window !== "undefined") {
+  if (shouldShowEvolution && typeof window !== "undefined" && typeof window.alert === "function") {
     const postSpecies =
       typeof evolution.postSpecies === "string" && evolution.postSpecies.trim()
         ? evolution.postSpecies.trim()
@@ -180,39 +171,19 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
         ? evolution.postImage
         : stageDetail.image;
 
-    const runEvolutionSequence = async () => {
-      const overlayParent =
-        typeof document !== "undefined" && typeof document.querySelector === "function"
-          ? document.querySelector("#app")
-          : null;
-
-      try {
-        await showEvolutionSequence({
-          parent: overlayParent ?? document.body,
-          postSpecies,
-        });
-      } catch (error) {
-        console.error("Failed to present the evolution prompt:", error);
-      } finally {
-        avatar.setAttribute("src", postImage);
-        avatar.setAttribute("alt", `${postSpecies} avatar`);
-      }
+    const runEvolutionSequence = () => {
+      window.alert("Your Pokemon is evolving!?");
+      window.alert(`Congratulations, your pokemon has evolved into ${postSpecies}`);
+      avatar.setAttribute("src", postImage);
+      avatar.setAttribute("alt", `${postSpecies} avatar`);
     };
 
     if (typeof window.requestAnimationFrame === "function") {
       window.requestAnimationFrame(() => {
-        window.setTimeout(() => {
-          runEvolutionSequence().catch((error) => {
-            console.error("Evolution sequence errored:", error);
-          });
-        }, 0);
+        window.setTimeout(runEvolutionSequence, 0);
       });
     } else {
-      window.setTimeout(() => {
-        runEvolutionSequence().catch((error) => {
-          console.error("Evolution sequence errored:", error);
-        });
-      }, 0);
+      window.setTimeout(runEvolutionSequence, 0);
     }
   }
 

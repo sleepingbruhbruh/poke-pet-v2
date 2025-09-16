@@ -3,6 +3,10 @@ const DEFAULT_BACKEND_URL = "http://localhost:3000";
 const displayMessages = [];
 const conversationHistory = [];
 
+const TALKING_STREAK_FIELD = "talking-streak";
+const USERNAME_STORAGE_KEY = "poke-pet.username";
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 const STAGE_DETAILS = {
   1: { species: "Pichu", image: "images/pichu.svg" },
   2: { species: "Pikachu", image: "images/pikachu.svg" },
@@ -247,6 +251,66 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
+
+function loadCachedUsername() {
+  if (typeof localStorage === "undefined") {
+    return "";
+  }
+
+  try {
+    const rawValue = localStorage.getItem(USERNAME_STORAGE_KEY);
+    return sanitizeIdentifier(rawValue, "");
+  } catch (error) {
+    console.warn("Failed to load cached username:", error);
+    return "";
+  }
+}
+
+function storeCachedUsername(username) {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+
+  const sanitized = sanitizeIdentifier(username, "");
+
+  try {
+    if (sanitized) {
+      localStorage.setItem(USERNAME_STORAGE_KEY, sanitized);
+    } else {
+      localStorage.removeItem(USERNAME_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.warn("Failed to store cached username:", error);
+  }
+}
+
+function clearCachedUsername() {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+
+  try {
+    localStorage.removeItem(USERNAME_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Failed to clear cached username:", error);
+  }
+}
+
+function getTalkingStreakValue(pet) {
+  if (!pet || typeof pet !== "object") {
+    return 0;
+  }
+
+  const rawValue = pet[TALKING_STREAK_FIELD] ?? pet.talkingStreak;
+  const numeric = Number(rawValue);
+
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 0;
+  }
+
+  return Math.round(numeric);
+}
+
 function createNetworkError(message, cause) {
   const fallbackMessage = typeof message === "string" && message.trim()
     ? message.trim()
@@ -341,6 +405,7 @@ function normalizeUserRecord(rawUser) {
 
       const stageNumber = Number(pet.stage);
       const friendshipNumber = Number(pet.friendship);
+      const talkingStreak = getTalkingStreakValue(pet);
 
       let lastChatted = null;
       const rawLastChatted = pet.lastChatted;
@@ -368,6 +433,7 @@ function normalizeUserRecord(rawUser) {
         stage: Number.isFinite(stageNumber) ? stageNumber : undefined,
         friendship: Number.isFinite(friendshipNumber) ? friendshipNumber : 0,
         lastChatted: lastChatted ?? null,
+        [TALKING_STREAK_FIELD]: talkingStreak,
       };
     })
     .filter(Boolean);
@@ -446,6 +512,7 @@ function buildRoleplayPrompt({ userInput, species, friendship, context, nickname
     "    your personality depends on friendship score (1 being the saddest/most negative, 50 being neutral and 100 being the most happy/positive)",
     "    answer in a concise 2-3 sentences response. Except only when the output wouldn't meet user demand in just 2-3 sentences.",
     "    Output only the messages in the same language as user input (no explanations, no JSON, no prose).",
+    "    -Nickname is the name user gave. You dont need to introduce yourself.",
   ].join("\n");
 }
 
@@ -564,6 +631,123 @@ async function createUserRecord(backendURL, username, petName) {
     normalizationError.cause = error;
     throw normalizationError;
   }
+}
+
+async function updateTrainerPet(backendURL, username, petId, petPayload) {
+  const base = backendURL.replace(/\/$/, "");
+  const trainerId = sanitizeIdentifier(username);
+  const normalizedPetId = sanitizeIdentifier(petId);
+
+  if (!trainerId || !normalizedPetId) {
+    throw new Error("A trainer and pet identifier are required to update a Pokémon.");
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${base}/users/${encodeURIComponent(trainerId)}/pets/${encodeURIComponent(normalizedPetId)}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(petPayload ?? {}),
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to update your Pokémon. Please check your connection and try again.",
+      networkError,
+    );
+  }
+
+  if (!response.ok) {
+    const fallbackMessage = `Failed to update the Pokémon (status ${response.status}).`;
+    const message = await readResponseMessage(response, fallbackMessage);
+    const error = new Error(message || fallbackMessage);
+    error.status = response.status;
+    throw error;
+  }
+}
+
+async function deleteTrainerPet(backendURL, username, petId) {
+  const base = backendURL.replace(/\/$/, "");
+  const trainerId = sanitizeIdentifier(username);
+  const normalizedPetId = sanitizeIdentifier(petId);
+
+  if (!trainerId || !normalizedPetId) {
+    throw new Error("A trainer and pet identifier are required to delete a Pokémon.");
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${base}/users/${encodeURIComponent(trainerId)}/pets/${encodeURIComponent(normalizedPetId)}`, {
+      method: "DELETE",
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to remove your Pokémon. Please check your connection and try again.",
+      networkError,
+    );
+  }
+
+  if (!response.ok && response.status !== 204) {
+    const fallbackMessage = `Failed to remove the Pokémon (status ${response.status}).`;
+    const message = await readResponseMessage(response, fallbackMessage);
+    const error = new Error(message || fallbackMessage);
+    error.status = response.status;
+    throw error;
+  }
+}
+
+async function createTrainerPet(backendURL, username, petName) {
+  const base = backendURL.replace(/\/$/, "");
+  const trainerId = sanitizeIdentifier(username);
+  const companionName = sanitizeIdentifier(petName);
+
+  if (!trainerId) {
+    throw new Error("A trainer identifier is required to create a Pokémon.");
+  }
+
+  if (!companionName) {
+    throw new Error("A Pokémon name is required to create the record.");
+  }
+
+  const petPayload = {
+    name: companionName,
+    stage: 1,
+    friendship: 50,
+    lastChatted: new Date().toISOString(),
+    [TALKING_STREAK_FIELD]: 0,
+  };
+
+  let response;
+
+  try {
+    response = await fetch(`${base}/users/${encodeURIComponent(trainerId)}/pets`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(petPayload),
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "We couldn't reach the server to create your Pokémon. Please check your connection and try again.",
+      networkError,
+    );
+  }
+
+  if (!response.ok) {
+    const fallbackMessage = `Failed to create the Pokémon (status ${response.status}).`;
+    const message = await readResponseMessage(response, fallbackMessage);
+    const error = new Error(message || fallbackMessage);
+    error.status = response.status;
+    throw error;
+  }
+
+  await response.json().catch(() => null);
 }
 
 function renderInputPrompt(appRoot, options) {
@@ -721,6 +905,90 @@ function promptForPetName(appRoot, { initialValue = "", errorMessage = "" } = {}
   });
 }
 
+function showRunAwayPrompt(appRoot, petName) {
+  const safeName = sanitizeIdentifier(petName, "Your companion");
+
+  return new Promise((resolve) => {
+    appRoot.innerHTML = "";
+
+    const container = createElement("div", { className: "prompt-overlay" });
+    const card = createElement("div", { className: "prompt-card" });
+
+    const title = createElement("div", {
+      className: "prompt-title",
+      textContent: `${safeName} has ran away.`,
+    });
+
+    const button = createElement("button", {
+      className: "prompt-submit-button",
+      textContent: "Ok..",
+      attributes: {
+        type: "button",
+        "aria-label": "Acknowledge run away notice",
+      },
+    });
+
+    const buttonWrapper = createElement("div", {
+      className: "prompt-input-wrapper",
+      children: [button],
+    });
+
+    card.appendChild(title);
+    card.appendChild(buttonWrapper);
+    container.appendChild(card);
+    appRoot.appendChild(container);
+
+    button.addEventListener("click", () => {
+      button.disabled = true;
+
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+
+      resolve();
+    });
+
+    button.focus();
+  });
+}
+
+async function promptForExistingTrainerPet(appRoot, backendURL, username) {
+  let petName = "";
+  let errorMessage = "";
+
+  while (true) {
+    petName = await promptForPetName(appRoot, { initialValue: petName, errorMessage });
+    errorMessage = "";
+
+    try {
+      await createTrainerPet(backendURL, username, petName);
+    } catch (error) {
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to create your Pokémon. Please try again.",
+        "We couldn't reach the server to create your Pokémon. Please check your connection and try again.",
+      );
+      continue;
+    }
+
+    try {
+      const refreshedUser = await fetchUserRecord(backendURL, username);
+
+      if (refreshedUser) {
+        return refreshedUser;
+      }
+
+      errorMessage = "We couldn't load your trainer. Please try again.";
+    } catch (fetchError) {
+      errorMessage = resolveErrorMessage(
+        fetchError,
+        "We couldn't load your trainer. Please try again.",
+        "We couldn't load your trainer due to a network issue. Please check your connection and try again.",
+      );
+    }
+  }
+}
+
 async function handleUserCreation(appRoot, backendURL, username) {
   let petName = "";
   let errorMessage = "";
@@ -793,11 +1061,34 @@ async function handleUserCreation(appRoot, backendURL, username) {
 }
 
 async function bootstrapUserSelection(appRoot, backendURL) {
-  let username = "";
+  let username = loadCachedUsername();
   let errorMessage = "";
+
+  if (username) {
+    try {
+      const cachedUser = await fetchUserRecord(backendURL, username);
+
+      if (cachedUser) {
+        storeCachedUsername(cachedUser.id ?? username);
+        return cachedUser;
+      }
+
+      errorMessage = "We couldn't find that trainer. Please create one.";
+      clearCachedUsername();
+    } catch (error) {
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to look up that trainer. Please try again.",
+        "We couldn't connect to the trainer service. Please check your connection and try again.",
+      );
+    }
+  }
+
+  username = username || "";
 
   while (true) {
     username = await promptForUsername(appRoot, { initialValue: username, errorMessage });
+    storeCachedUsername(username);
     errorMessage = "";
 
     let existingUser;
@@ -813,7 +1104,8 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       continue;
     }
 
-    if (existingUser) {
+    if (existingUser) 
+      storeCachedUsername(existingUser.id ?? username);n
       return existingUser;
     }
 
@@ -821,6 +1113,7 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       const createdUser = await handleUserCreation(appRoot, backendURL, username);
 
       if (createdUser) {
+        storeCachedUsername(createdUser.id ?? username);
         return createdUser;
       }
 
@@ -989,6 +1282,9 @@ function buildProfileColumn({ user, pet }) {
     createInfoRow("Last-chatted", lastChattedDisplay),
   ];
 
+  const talkingStreakDisplay = `${getTalkingStreakValue(activePet)} days`;
+  infoRows.push(createInfoRow("Talking Streak", talkingStreakDisplay));
+
   const infoCardChildren = [
     createElement("div", { className: "info-grid", children: infoRows }),
     buildFriendshipSection(activePet?.friendship ?? 0),
@@ -1002,6 +1298,173 @@ function buildProfileColumn({ user, pet }) {
   );
 
   return column;
+}
+
+async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
+  const activePet = selectActivePet(user);
+
+  if (!activePet) {
+    return { user, pet: null, messages: [] };
+  }
+
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const petIdentifier = sanitizeIdentifier(activePet._id ?? activePet.id, "");
+
+  if (!petIdentifier) {
+    console.warn("Unable to update pet without identifier.");
+    return { user, pet: activePet, messages: [] };
+  }
+
+  let lastChattedDate = null;
+
+  if (activePet.lastChatted instanceof Date) {
+    lastChattedDate = activePet.lastChatted;
+  } else if (typeof activePet.lastChatted === "string" && activePet.lastChatted.trim()) {
+    const parsed = new Date(activePet.lastChatted.trim());
+
+    if (!Number.isNaN(parsed.getTime())) {
+      lastChattedDate = parsed;
+    }
+  } else if (activePet.lastChatted !== undefined && activePet.lastChatted !== null) {
+    const parsed = new Date(activePet.lastChatted);
+
+    if (!Number.isNaN(parsed.getTime())) {
+      lastChattedDate = parsed;
+    }
+  }
+
+  let dayDifference = 0;
+
+  if (lastChattedDate) {
+    const lastChattedStart = new Date(lastChattedDate);
+    lastChattedStart.setHours(0, 0, 0, 0);
+    const diffMs = todayStart.getTime() - lastChattedStart.getTime();
+
+    if (diffMs > 0) {
+      dayDifference = Math.floor(diffMs / MS_PER_DAY);
+    }
+  }
+
+  const updates = {};
+  const originalFriendship = clampFriendship(activePet.friendship);
+  let newFriendship = originalFriendship;
+  let newStreak = getTalkingStreakValue(activePet);
+  const stageValue = Number(activePet.stage);
+  const stageBefore = Number.isFinite(stageValue) ? stageValue : 1;
+  let stageAfter = stageBefore;
+  let evolutionMessage = null;
+
+  if (originalFriendship <= 0) {
+    await deleteTrainerPet(backendURL, user.id, petIdentifier);
+    await showRunAwayPrompt(appRoot, activePet.name);
+    const refreshedUser = await promptForExistingTrainerPet(appRoot, backendURL, user.id);
+    storeCachedUsername(refreshedUser.id ?? user.id);
+    const refreshedPet = selectActivePet(refreshedUser);
+
+    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [] };
+  }
+
+  if (dayDifference === 1) {
+    newStreak += 1;
+    updates[TALKING_STREAK_FIELD] = newStreak;
+  } else if (dayDifference > 1) {
+    if (newStreak !== 0) {
+      newStreak = 0;
+      updates[TALKING_STREAK_FIELD] = 0;
+    }
+  }
+
+  if (dayDifference >= 3) {
+    const penalty = dayDifference * 10;
+    const decreasedFriendship = Math.max(0, newFriendship - penalty);
+
+    if (decreasedFriendship !== newFriendship) {
+      newFriendship = decreasedFriendship;
+      updates.friendship = newFriendship;
+    }
+  }
+
+  if (stageBefore < 3 && newStreak >= 7) {
+    stageAfter = stageBefore + 1;
+    updates.stage = stageAfter;
+    updates[TALKING_STREAK_FIELD] = 0;
+
+    const previousStageDetail = getStageDetail(stageBefore) ?? DEFAULT_STAGE_DETAIL;
+    const nextStageDetail = getStageDetail(stageAfter) ?? previousStageDetail;
+    const preSpecies =
+      previousStageDetail && typeof previousStageDetail.species === "string" && previousStageDetail.species.trim()
+        ? previousStageDetail.species.trim()
+        : DEFAULT_STAGE_DETAIL.species;
+    const postSpecies =
+      nextStageDetail && typeof nextStageDetail.species === "string" && nextStageDetail.species.trim()
+        ? nextStageDetail.species.trim()
+        : preSpecies;
+    const companionName = sanitizeIdentifier(activePet.name, "Your companion");
+
+    evolutionMessage = `${companionName} has evolved from ${preSpecies} to ${postSpecies}!`;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { user, pet: activePet, messages: [] };
+  }
+
+  if (updates.friendship !== undefined && updates.friendship <= 0) {
+    await deleteTrainerPet(backendURL, user.id, petIdentifier);
+    await showRunAwayPrompt(appRoot, activePet.name);
+    const refreshedUser = await promptForExistingTrainerPet(appRoot, backendURL, user.id);
+    storeCachedUsername(refreshedUser.id ?? user.id);
+    const refreshedPet = selectActivePet(refreshedUser);
+
+    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [] };
+  }
+
+  const payload = { ...activePet, ...updates };
+
+  await updateTrainerPet(backendURL, user.id, petIdentifier, payload);
+
+  let refreshedUser = null;
+
+  try {
+    refreshedUser = await fetchUserRecord(backendURL, user.id);
+  } catch (error) {
+    console.error("Failed to refresh trainer after updating pet:", error);
+  }
+
+  let resolvedUser = refreshedUser;
+
+  if (!resolvedUser) {
+    const updatedPets = Array.isArray(user.pets)
+      ? user.pets.map((pet) => {
+          if (!pet || typeof pet !== "object") {
+            return pet;
+          }
+
+          const candidateId = sanitizeIdentifier(pet._id ?? pet.id, "");
+
+          if (candidateId && candidateId === petIdentifier) {
+            return { ...pet, ...updates };
+          }
+
+          return pet;
+        })
+      : user.pets;
+
+    resolvedUser = { ...user, pets: updatedPets };
+  }
+
+  const refreshedPet = selectActivePet(resolvedUser) ?? activePet;
+  const messages = [];
+
+  if (evolutionMessage) {
+    messages.push({ sender: "System", message: evolutionMessage });
+  }
+
+  storeCachedUsername((resolvedUser && resolvedUser.id) ?? user.id);
+
+  return { user: resolvedUser, pet: refreshedPet, messages };
 }
 
 function buildChatSection({ user, pet, backendURL }) {
@@ -1194,7 +1657,16 @@ async function initApp() {
     return;
   }
 
-  const activePet = selectActivePet(user);
+  let adjustmentResult = { user, pet: selectActivePet(user), messages: [] };
+
+  try {
+    adjustmentResult = await applyPetDailyAdjustments({ appRoot, backendURL, user });
+    user = adjustmentResult.user;
+  } catch (error) {
+    console.error("Failed to apply pet adjustments:", error);
+  }
+
+  const activePet = adjustmentResult.pet ?? selectActivePet(user);
 
   const introMessage = activePet
     ? `${activePet.name} perks up, ready to chat.`
@@ -1204,6 +1676,13 @@ async function initApp() {
     sender: "System",
     message: `You are chatting as ${user.id}. ${introMessage}`,
   });
+
+  adjustmentResult.messages
+    .filter((entry) => entry && typeof entry.message === "string" && entry.message.trim())
+    .forEach((entry) => {
+      const senderLabel = sanitizeIdentifier(entry.sender, "System");
+      displayMessages.push({ sender: senderLabel, message: entry.message.trim() });
+    });
 
   const { root, focusTarget } = buildAppShell({ user, pet: activePet, backendURL });
 

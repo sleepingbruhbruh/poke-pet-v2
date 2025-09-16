@@ -1596,25 +1596,16 @@ function buildChatSection({ user, pet, backendURL }) {
     children: [inputField, sendButton],
   });
 
-  const headerChildren = [
-    createElement("div", {
-      className: "chat-header-title",
-      textContent: `Trainer: ${user.id}`,
-    }),
-  ];
-
-  if (pet) {
-    headerChildren.push(
-      createElement("div", {
-        className: "chat-header-subtitle",
-        textContent: `Chatting with ${pet.name}`,
-      }),
-    );
-  }
-
+  const fallbackCompanionName = pet ? resolvePetSpecies(pet) : "your companion";
+  const headerCompanionName = sanitizeIdentifier(pet?.name, fallbackCompanionName);
   const chatHeader = createElement("div", {
     className: "chat-header",
-    children: headerChildren,
+    children: [
+      createElement("div", {
+        className: "chat-header-title",
+        textContent: `Chatting with ${headerCompanionName}`,
+      }),
+    ],
   });
 
   const chatWrapper = createElement("div", {

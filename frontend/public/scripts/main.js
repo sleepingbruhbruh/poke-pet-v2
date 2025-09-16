@@ -1122,7 +1122,7 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       );
       continue;
     }
-
+    
     if (existingUser) {
       storeCachedUsername(existingUser.id ?? username);
       return existingUser;
@@ -1130,7 +1130,6 @@ async function bootstrapUserSelection(appRoot, backendURL) {
 
     try {
       const createdUser = await handleUserCreation(appRoot, backendURL, username);
-
 
       if (createdUser) {
         storeCachedUsername(createdUser.id ?? username);

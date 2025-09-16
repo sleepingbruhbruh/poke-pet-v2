@@ -30,6 +30,17 @@ function ensureCurrentUserBadge() {
   return badge;
 }
 
+function hideCurrentUserBadge() {
+  const badge = ensureCurrentUserBadge();
+
+  if (!badge) {
+    return;
+  }
+
+  badge.textContent = "";
+  badge.classList.add("is-hidden");
+}
+
 function updateCurrentUserBadge(username) {
   const badge = ensureCurrentUserBadge();
 
@@ -38,10 +49,12 @@ function updateCurrentUserBadge(username) {
   }
 
   const safeName = sanitizeIdentifier(username, "");
+  const isChatVisible = Boolean(
+    typeof document !== "undefined" && document.querySelector(".app-shell"),
+  );
 
-  if (!safeName) {
-    badge.textContent = "";
-    badge.classList.add("is-hidden");
+  if (!safeName || isChatVisible) {
+    hideCurrentUserBadge();
     return;
   }
 
@@ -236,6 +249,7 @@ async function initApp() {
 
   appRoot.innerHTML = "";
   appRoot.appendChild(root);
+  hideCurrentUserBadge();
 
   if (focusTarget) {
     focusTarget.focus();

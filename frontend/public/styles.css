@@ -11,6 +11,10 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: #d8d8d8;
+  background-image: url("/images/bg.png");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -249,8 +253,20 @@ body {
 .friendship-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #81c784 0%, #43a047 100%);
-  transition: width 0.3s ease;
+  background-color: #43a047;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.friendship-bar-fill.friendship-low {
+  background-color: #e53935;
+}
+
+.friendship-bar-fill.friendship-medium {
+  background-color: #fbc02d;
+}
+
+.friendship-bar-fill.friendship-high {
+  background-color: #43a047;
 }
 
 .friendship-value {

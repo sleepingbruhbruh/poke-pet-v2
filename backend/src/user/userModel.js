@@ -26,6 +26,11 @@ const userSchema = new mongoose.Schema({
         required: true,
         default: Date.now,
       },
+      "talking-streak": {
+        type: Number,
+        required: true,
+        default: () => 0,
+      },
       context: {
         type: String,
       },

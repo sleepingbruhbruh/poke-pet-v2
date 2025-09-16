@@ -247,6 +247,58 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
+function createNetworkError(message, cause) {
+  const fallbackMessage = typeof message === "string" && message.trim()
+    ? message.trim()
+    : "A network error occurred.";
+  const error = new Error(fallbackMessage);
+
+  error.status = 0;
+
+  if (cause !== undefined) {
+    error.cause = cause;
+  }
+
+  return error;
+}
+
+function resolveErrorMessage(error, fallbackMessage, networkFallbackMessage = fallbackMessage) {
+  const fallback = typeof fallbackMessage === "string" && fallbackMessage.trim()
+    ? fallbackMessage.trim()
+    : "Something went wrong.";
+  const networkFallback = typeof networkFallbackMessage === "string" && networkFallbackMessage.trim()
+    ? networkFallbackMessage.trim()
+    : fallback;
+
+  if (error instanceof Error) {
+    if (Number(error.status) === 0) {
+      return networkFallback;
+    }
+
+    const trimmed = typeof error.message === "string" ? error.message.trim() : "";
+
+    if (trimmed) {
+      return trimmed;
+    }
+
+    return fallback;
+  }
+
+  if (error && typeof error === "object") {
+    if (Number(error.status) === 0) {
+      return networkFallback;
+    }
+
+    const message = typeof error.message === "string" ? error.message.trim() : "";
+
+    if (message) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 async function readResponseMessage(response, fallbackMessage = "") {
   const fallback = typeof fallbackMessage === "string" ? fallbackMessage : "";
   const rawText = await response.text().catch(() => "");
@@ -327,19 +379,92 @@ function normalizeUserRecord(rawUser) {
   };
 }
 
+function formatConversationContext(history, { trainerName, petName }) {
+  const safeTrainerName = sanitizeIdentifier(trainerName, "Trainer");
+  const safePetName = sanitizeIdentifier(petName, "Companion");
+
+  if (!Array.isArray(history) || history.length === 0) {
+    return "";
+  }
+
+  const transcript = [];
+
+  history.forEach((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return;
+    }
+
+    const { role, content } = entry;
+
+    if (typeof content !== "string") {
+      return;
+    }
+
+    const trimmedContent = content.trim();
+
+    if (!trimmedContent) {
+      return;
+    }
+
+    if (role === "user") {
+      transcript.push(`${safeTrainerName}: ${trimmedContent}`);
+    } else if (role === "assistant") {
+      transcript.push(`${safePetName}: ${trimmedContent}`);
+    }
+  });
+
+  return transcript.join("\n");
+}
+
+function buildRoleplayPrompt({ userInput, species, friendship, context }) {
+  const resolvedInput = typeof userInput === "string" ? userInput : String(userInput ?? "");
+  const resolvedSpecies = typeof species === "string" && species.trim()
+    ? species.trim()
+    : "Pokémon";
+  const boundedFriendship = clampFriendship(friendship);
+  const contextString = typeof context === "string" ? context.trim() : "";
+  const resolvedContext = contextString || "(no previous messages yet)";
+
+  return [
+    "Pokémon roleplay",
+    "🎯 Objective:",
+    "Generate a realistic response that a pokemon would make if its able to talk, in the same language as user input for a specified Your Persona being a pokemon species.",
+    "The output will be a concise 2-3 sentences response.",
+    "",
+    `User Input: ${resolvedInput}`,
+    `Your Persona: ${resolvedSpecies}`,
+    `Your Friendship: ${boundedFriendship}`,
+    `Context: ${resolvedContext}`,
+    "",
+    "📌 General Rules:",
+    "",
+    "    Context is the previous chat history in the user current session.",
+    "    your personality depends on friendship score (1 being the saddest/most negative, 50 being neutral and 100 being the most happy/positive)",
+    "    answer in a concise 2-3 sentences response. Except only when the output wouldn't meet user demand in just 2-3 sentences.",
+    "    Output only the messages in the same language as user input (no explanations, no JSON, no prose).",
+  ].join("\n");
+}
+
 async function fetchUserRecord(backendURL, username) {
   const base = backendURL.replace(/\/$/, "");
   const encoded = encodeURIComponent(username);
-  const response = await fetch(`${base}/users/${encoded}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  let response;
+
+  try {
+    response = await fetch(`${base}/users/${encoded}`, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to reach the trainer service. Please check your connection and try again.",
+      networkError,
+    );
+  }
 
   if (response.status === 404) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
+    return null;
   }
 
   if (!response.ok) {
@@ -353,12 +478,25 @@ async function fetchUserRecord(backendURL, username) {
   const payload = await response.json().catch(() => null);
 
   if (!payload) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
+    return null;
   }
 
-  return normalizeUserRecord(payload);
+  try {
+    return normalizeUserRecord(payload);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (typeof error.status !== "number") {
+        error.status = 500;
+      }
+
+      throw error;
+    }
+
+    const normalizationError = new Error("Trainer data returned by the server is invalid.");
+    normalizationError.status = 500;
+    normalizationError.cause = error;
+    throw normalizationError;
+  }
 }
 
 async function createUserRecord(backendURL, username, petName) {
@@ -366,14 +504,23 @@ async function createUserRecord(backendURL, username, petName) {
   const trainerId = sanitizeIdentifier(username);
   const companionName = sanitizeIdentifier(petName);
 
-  const response = await fetch(`${base}/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ name: trainerId, petName: companionName }),
-  });
+  let response;
+
+  try {
+    response = await fetch(`${base}/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ name: trainerId, petName: companionName }),
+    });
+  } catch (networkError) {
+    throw createNetworkError(
+      "Unable to reach the trainer service to save your Pokémon. Please check your connection and try again.",
+      networkError,
+    );
+  }
 
   if (response.status === 409) {
     const existing = await response.json().catch(() => null);
@@ -393,7 +540,26 @@ async function createUserRecord(backendURL, username, petName) {
 
   const created = await response.json().catch(() => null);
 
-  return created ? normalizeUserRecord(created) : null;
+  if (!created) {
+    return null;
+  }
+
+  try {
+    return normalizeUserRecord(created);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (typeof error.status !== "number") {
+        error.status = 500;
+      }
+
+      throw error;
+    }
+
+    const normalizationError = new Error("Trainer data returned by the server is invalid.");
+    normalizationError.status = 500;
+    normalizationError.cause = error;
+    throw normalizationError;
+  }
 }
 
 function renderInputPrompt(appRoot, options) {
@@ -561,7 +727,11 @@ async function handleUserCreation(appRoot, backendURL, username) {
     errorMessage = "";
 
     try {
-      await createUserRecord(backendURL, username, petName);
+      const createdUser = await createUserRecord(backendURL, username, petName);
+
+      if (createdUser) {
+        return createdUser;
+      }
     } catch (error) {
       if (error && error.status === 409) {
         if (error.payload) {
@@ -573,30 +743,47 @@ async function handleUserCreation(appRoot, backendURL, username) {
         }
 
         try {
-          return await fetchUserRecord(backendURL, username);
+          const existingUser = await fetchUserRecord(backendURL, username);
+
+          if (existingUser) {
+            return existingUser;
+          }
+
+          errorMessage = "We couldn't load your trainer. Please try again.";
         } catch (fetchError) {
-          errorMessage =
-            fetchError instanceof Error && fetchError.message
-              ? fetchError.message
-              : "We couldn't load your trainer. Please try again.";
+          errorMessage = resolveErrorMessage(
+            fetchError,
+            "We couldn't load your trainer. Please try again.",
+            "We couldn't load your trainer due to a network issue. Please check your connection and try again.",
+          );
           continue;
         }
+
+        continue;
       }
 
-      errorMessage =
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to create your Pokémon. Please try again.";
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to create your Pokémon. Please try again.",
+        "We couldn't reach the server to create your Pokémon. Please check your connection and try again.",
+      );
       continue;
     }
 
     try {
-      return await fetchUserRecord(backendURL, username);
+      const createdUser = await fetchUserRecord(backendURL, username);
+
+      if (createdUser) {
+        return createdUser;
+      }
+
+      errorMessage = "We couldn't load your trainer. Please try again.";
     } catch (fetchError) {
-      errorMessage =
-        fetchError instanceof Error && fetchError.message
-          ? fetchError.message
-          : "We couldn't load your trainer. Please try again.";
+      errorMessage = resolveErrorMessage(
+        fetchError,
+        "We couldn't load your trainer. Please try again.",
+        "We couldn't load your trainer due to a network issue. Please check your connection and try again.",
+      );
     }
   }
 }
@@ -609,30 +796,37 @@ async function bootstrapUserSelection(appRoot, backendURL) {
     username = await promptForUsername(appRoot, { initialValue: username, errorMessage });
     errorMessage = "";
 
+    let existingUser;
+
     try {
-      return await fetchUserRecord(backendURL, username);
+      existingUser = await fetchUserRecord(backendURL, username);
     } catch (error) {
-      if (error && error.status === 404) {
-        try {
-          const createdUser = await handleUserCreation(appRoot, backendURL, username);
+      errorMessage = resolveErrorMessage(
+        error,
+        "Unable to look up that trainer. Please try again.",
+        "We couldn't connect to the trainer service. Please check your connection and try again.",
+      );
+      continue;
+    }
 
-          if (createdUser) {
-            return createdUser;
-          }
+    if (existingUser) {
+      return existingUser;
+    }
 
-          errorMessage = "We couldn't create the trainer. Please try again.";
-        } catch (creationError) {
-          errorMessage =
-            creationError instanceof Error && creationError.message
-              ? creationError.message
-              : "We couldn't create the trainer. Please try again.";
-        }
-      } else {
-        errorMessage =
-          error instanceof Error && error.message
-            ? error.message
-            : "Unable to look up that trainer. Please try again.";
+    try {
+      const createdUser = await handleUserCreation(appRoot, backendURL, username);
+
+      if (createdUser) {
+        return createdUser;
       }
+
+      errorMessage = "We couldn't create the trainer. Please try again.";
+    } catch (creationError) {
+      errorMessage = resolveErrorMessage(
+        creationError,
+        "We couldn't create the trainer. Please try again.",
+        "We couldn't reach the server to create the trainer. Please check your connection and try again.",
+      );
     }
   }
 }
@@ -649,6 +843,28 @@ function getStageDetail(stageValue) {
   }
 
   return DEFAULT_STAGE_DETAIL;
+}
+
+function resolvePetSpecies(pet) {
+  if (pet && typeof pet.species === "string") {
+    const trimmedSpecies = pet.species.trim();
+
+    if (trimmedSpecies) {
+      return trimmedSpecies;
+    }
+  }
+
+  const stageDetail = getStageDetail(pet?.stage);
+
+  if (stageDetail && typeof stageDetail.species === "string") {
+    const trimmedFromStage = stageDetail.species.trim();
+
+    if (trimmedFromStage) {
+      return trimmedFromStage;
+    }
+  }
+
+  return DEFAULT_STAGE_DETAIL.species;
 }
 
 function createInfoRow(label, value) {
@@ -821,21 +1037,45 @@ function buildChatSection({ user, pet, backendURL }) {
       return;
     }
 
-    const senderName = user.id;
-    appendMessage({ sender: senderName, message: trimmedMessage }, chatBox);
+    const trainerDisplayName = sanitizeIdentifier(user.id, "Trainer");
+    const petSpecies = resolvePetSpecies(pet);
+    const companionDisplayName = sanitizeIdentifier(pet?.name, petSpecies);
+    const personaContext =
+      pet && typeof pet.context === "string" && pet.context.trim()
+        ? pet.context.trim()
+        : "";
+    const conversationContext = formatConversationContext(conversationHistory, {
+      trainerName: trainerDisplayName,
+      petName: companionDisplayName,
+    });
+    const promptMessage = buildRoleplayPrompt({
+      userInput: trimmedMessage,
+      species: petSpecies,
+      friendship: pet?.friendship ?? 0,
+      context: conversationContext,
+    });
+
+    const requestMessages = [];
+
+    if (personaContext) {
+      requestMessages.push({ role: "system", content: personaContext });
+    }
+
+    requestMessages.push({ role: "user", content: promptMessage });
+
+    appendMessage({ sender: trainerDisplayName, message: trimmedMessage }, chatBox);
     conversationHistory.push({ role: "user", content: trimmedMessage });
 
     inputField.value = "";
     setSendingState(true);
 
     try {
-      const response = await requestChatCompletion(backendURL, conversationHistory);
+      const response = await requestChatCompletion(backendURL, requestMessages);
       const assistantText = extractAssistantMessage(response);
 
       if (assistantText) {
         conversationHistory.push({ role: "assistant", content: assistantText });
-        const petName = pet?.name ? String(pet.name) : "Pet";
-        appendMessage({ sender: petName, message: assistantText }, chatBox);
+        appendMessage({ sender: companionDisplayName, message: assistantText }, chatBox);
       } else {
         appendMessage(
           {
@@ -950,10 +1190,6 @@ async function initApp() {
   }
 
   const activePet = selectActivePet(user);
-
-  if (activePet?.context) {
-    conversationHistory.push({ role: "system", content: activePet.context });
-  }
 
   const introMessage = activePet
     ? `${activePet.name} perks up, ready to chat.`

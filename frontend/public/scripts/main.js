@@ -9,14 +9,14 @@ const LEGACY_USERNAME_STORAGE_KEYS = ["poke-pet.username"];
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const STAGE_DETAILS = {
-  1: { species: "Pichu", image: "images/pichu.svg" },
-  2: { species: "Pikachu", image: "images/pikachu.svg" },
-  3: { species: "Raichu", image: "images/raichu.svg" },
+  1: { species: "Pichu", image: "images/pichu.png" },
+  2: { species: "Pikachu", image: "images/pikachu.png" },
+  3: { species: "Raichu", image: "images/raichu.png" },
 };
 
 const DEFAULT_STAGE_DETAIL = {
   species: "Companion",
-  image: "images/pikachu.svg",
+  image: "images/pikachu.png",
 };
 
 function createElement(tag, options = {}) {

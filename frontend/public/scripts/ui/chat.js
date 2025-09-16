@@ -6,7 +6,6 @@ import { conversationHistory, displayMessages } from "../state.js";
 import {
   buildRoleplayPrompt,
   clampFriendship,
-  getFriendshipTier,
   formatConversationContext,
   sanitizeIdentifier,
 } from "../utils.js";
@@ -22,8 +21,7 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased, onLogou
   });
 
   const sendButton = createElement("button", {
-    className: "send-button",
-    textContent: "→",
+    textContent: "Send",
     attributes: {
       type: "button",
       "aria-label": "Send message",
@@ -116,14 +114,6 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased, onLogou
 
     if (friendshipProgressElement) {
       friendshipProgressElement.style.width = `${boundedFriendship}%`;
-      const tier = getFriendshipTier(boundedFriendship);
-      friendshipProgressElement.dataset.friendshipTier = tier;
-      friendshipProgressElement.classList.remove(
-        "friendship-bar-fill--low",
-        "friendship-bar-fill--medium",
-        "friendship-bar-fill--high",
-      );
-      friendshipProgressElement.classList.add(`friendship-bar-fill--${tier}`);
     }
   }
 

@@ -30,63 +30,6 @@ function ensureCurrentUserBadge() {
   return badge;
 }
 
-function updateCurrentUserBadge(username, { visible = true } = {}) {
-  const badge = ensureCurrentUserBadge();
-
-  if (!badge) {
-    return;
-  }
-
-  const safeName = sanitizeIdentifier(username, "");
-
-  if (!safeName) {
-    badge.textContent = "";
-    badge.classList.add("is-hidden");
-    delete badge.dataset.username;
-    return;
-  }
-
-  badge.textContent = `Currently logged in as: ${safeName}`;
-  badge.dataset.username = safeName;
-
-  if (visible) {
-    badge.classList.remove("is-hidden");
-  } else {
-    badge.classList.add("is-hidden");
-  }
-}
-
-function hideCurrentUserBadge() {
-  const badge = ensureCurrentUserBadge();
-
-  if (!badge) {
-    return;
-  }
-
-  badge.classList.add("is-hidden");
-}
-
-const CURRENT_USER_BADGE_ID = "current-user-badge";
-
-function ensureCurrentUserBadge() {
-  if (!document || !document.body) {
-    return null;
-  }
-
-  let badge = document.getElementById(CURRENT_USER_BADGE_ID);
-
-  if (!badge) {
-    badge = createElement("div", {
-      className: "current-user-indicator is-hidden",
-      attributes: { id: CURRENT_USER_BADGE_ID },
-    });
-
-    document.body.appendChild(badge);
-  }
-
-  return badge;
-}
-
 function updateCurrentUserBadge(username) {
   const badge = ensureCurrentUserBadge();
 
@@ -293,7 +236,6 @@ async function initApp() {
 
   appRoot.innerHTML = "";
   appRoot.appendChild(root);
-  hideCurrentUserBadge();
 
   if (focusTarget) {
     focusTarget.focus();

@@ -36,27 +36,13 @@ export function createMessageElement({ sender, message }) {
   const safeSender = typeof sender === "string" ? sender : String(sender ?? "");
   const safeMessage = typeof message === "string" ? message : String(message ?? "");
 
-  const trimmedSender = safeSender.trim();
-  const isSystemMessage = trimmedSender.toLowerCase() === "system";
-  const hasExplicitSender = Boolean(trimmedSender) && !isSystemMessage;
-  const classNames = ["message"];
+  const messageElement = createElement("div", { className: "message" });
+  const senderElement = createElement("strong", {
+    textContent: `${safeSender}:`,
+  });
 
-  if (isSystemMessage) {
-    classNames.push("message--system");
-  }
-
-  const messageElement = createElement("div", { className: classNames.join(" ") });
-
-  if (hasExplicitSender) {
-    const senderElement = createElement("strong", {
-      textContent: `${trimmedSender}:`,
-    });
-
-    messageElement.appendChild(senderElement);
-    messageElement.appendChild(document.createTextNode(` ${safeMessage}`));
-  } else {
-    messageElement.textContent = safeMessage;
-  }
+  messageElement.appendChild(senderElement);
+  messageElement.appendChild(document.createTextNode(` ${safeMessage}`));
 
   return messageElement;
 }

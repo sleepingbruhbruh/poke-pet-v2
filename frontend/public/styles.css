@@ -3,19 +3,18 @@
 }
 
 :root {
-  font-family: "Prompt", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #1f1f1f;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: #d8d8d8 url("images/bg.png") center / cover fixed no-repeat;
+  background-color: #d8d8d8;
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 48px 24px;
-  font-family: inherit;
 }
 
 #app {

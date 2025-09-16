@@ -49,15 +49,6 @@ function renderInputPrompt(appRoot, options) {
       input.value = initialValue;
     }
 
-    const clearButton = createElement("button", {
-      className: "prompt-clear-button",
-      textContent: "×",
-      attributes: {
-        type: "button",
-        "aria-label": "Clear input",
-      },
-    });
-
     const submitButton = createElement("button", {
       className: "prompt-submit-button",
       textContent: submitLabel,
@@ -68,7 +59,6 @@ function renderInputPrompt(appRoot, options) {
     });
 
     inputWrapper.appendChild(input);
-    inputWrapper.appendChild(clearButton);
     inputWrapper.appendChild(submitButton);
 
     const errorElement = createElement("div", {
@@ -94,20 +84,7 @@ function renderInputPrompt(appRoot, options) {
       }
     }
 
-    function updateClearButtonState() {
-      const hasValue = input.value.length > 0;
-      clearButton.disabled = !hasValue;
-    }
-
-    clearButton.addEventListener("click", () => {
-      input.value = "";
-      updateClearButtonState();
-      showError("");
-      input.focus();
-    });
-
     input.addEventListener("input", () => {
-      updateClearButtonState();
       if (!errorElement.classList.contains("is-hidden")) {
         showError("");
       }
@@ -124,13 +101,11 @@ function renderInputPrompt(appRoot, options) {
       }
 
       input.disabled = true;
-      clearButton.disabled = true;
       submitButton.disabled = true;
 
       resolve(trimmedValue);
     });
 
-    updateClearButtonState();
     input.focus();
   });
 }
@@ -138,7 +113,7 @@ function renderInputPrompt(appRoot, options) {
 export function promptForUsername(appRoot, { initialValue = "", errorMessage = "" } = {}) {
   return renderInputPrompt(appRoot, {
     title: "Enter username",
-    placeholder: "Value",
+    placeholder: "Enter your username..",
     initialValue,
     errorMessage,
     submitLabel: "→",
@@ -150,7 +125,7 @@ export function promptForPetName(appRoot, { initialValue = "", errorMessage = ""
   return renderInputPrompt(appRoot, {
     lead: "Looks like you currently don't own a Pokémon.",
     title: "Enter your new pokemon name",
-    placeholder: "Value",
+    placeholder: "Enter new Pokemon name..",
     initialValue,
     errorMessage,
     submitLabel: "→",

@@ -9,6 +9,45 @@ import { sanitizeIdentifier } from "./utils.js";
 import { showRunAwayPrompt } from "./ui/prompts.js";
 import { clearCachedUsername, storeCachedUsername } from "./storage.js";
 
+const CURRENT_USER_BADGE_ID = "current-user-badge";
+
+function ensureCurrentUserBadge() {
+  if (!document || !document.body) {
+    return null;
+  }
+
+  let badge = document.getElementById(CURRENT_USER_BADGE_ID);
+
+  if (!badge) {
+    badge = createElement("div", {
+      className: "current-user-indicator is-hidden",
+      attributes: { id: CURRENT_USER_BADGE_ID },
+    });
+
+    document.body.appendChild(badge);
+  }
+
+  return badge;
+}
+
+function updateCurrentUserBadge(username) {
+  const badge = ensureCurrentUserBadge();
+
+  if (!badge) {
+    return;
+  }
+
+  const safeName = sanitizeIdentifier(username, "");
+
+  if (!safeName) {
+    badge.textContent = "";
+    badge.classList.add("is-hidden");
+    return;
+  }
+
+  badge.textContent = `Currently logged in as: ${safeName}`;
+  badge.classList.remove("is-hidden");
+}
 async function initApp() {
   const appRoot = document.querySelector("#app");
 
@@ -19,6 +58,7 @@ async function initApp() {
 
   appRoot.innerHTML = "";
   resetState();
+  updateCurrentUserBadge("");
 
   const backendURL = await resolveBackendURL();
 
@@ -26,6 +66,7 @@ async function initApp() {
 
   try {
     user = await bootstrapUserSelection(appRoot, backendURL);
+    updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
   } catch (error) {
     console.error(error);
     const errorMessage = error instanceof Error ? error.message : "Failed to load the player profile.";
@@ -44,6 +85,7 @@ async function initApp() {
   try {
     adjustmentResult = await applyPetDailyAdjustments({ appRoot, backendURL, user });
     user = adjustmentResult.user;
+    updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
   } catch (error) {
     console.error("Failed to apply pet adjustments:", error);
   }
@@ -59,6 +101,7 @@ async function initApp() {
       const refreshedUser = await promptForExistingTrainerPet(appRoot, backendURL, user.id);
       storeCachedUsername(refreshedUser.id ?? user.id);
       user = refreshedUser;
+      updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
       activePet = selectActivePet(user);
       evolutionDetail = null;
       pendingMessages = [];
@@ -144,6 +187,7 @@ async function initApp() {
     }
 
     storeCachedUsername(refreshedUser.id ?? user.id);
+    updateCurrentUserBadge(refreshedUser?.id ?? user.id ?? "");
 
     try {
       await initApp();
@@ -155,6 +199,7 @@ async function initApp() {
 
   async function handleLogout() {
     clearCachedUsername();
+    updateCurrentUserBadge("");
 
     try {
       await initApp();

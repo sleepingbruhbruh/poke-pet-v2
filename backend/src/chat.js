@@ -1,4 +1,190 @@
-const deepseekBaseURL = "https://api.deepseek.com/v1/chat/completions";
+const deepseekBaseURL = "https://openrouter.ai/api/v1/chat/completions";
+
+function normalizeMessages(rawMessages) {
+  if (!Array.isArray(rawMessages)) {
+    return null;
+  }
+
+  const normalized = [];
+
+  for (let index = 0; index < rawMessages.length; index += 1) {
+    const entry = rawMessages[index];
+
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const rawRole = typeof entry.role === "string" ? entry.role.trim() : "";
+
+    if (!rawRole) {
+      return null;
+    }
+
+    const role = rawRole.toLowerCase();
+    const contentCandidate = entry.content;
+
+    let textContent = "";
+
+    if (Array.isArray(contentCandidate)) {
+      textContent = contentCandidate
+        .map((part) => {
+          if (typeof part === "string") {
+            return part;
+          }
+
+          if (part && typeof part.text === "string") {
+            return part.text;
+          }
+
+          return "";
+        })
+        .join("");
+    } else if (typeof contentCandidate === "string") {
+      textContent = contentCandidate;
+    } else if (contentCandidate && typeof contentCandidate === "object" && typeof contentCandidate.text === "string") {
+      textContent = contentCandidate.text;
+    } else if (contentCandidate !== undefined && contentCandidate !== null) {
+      textContent = String(contentCandidate);
+    }
+
+    const trimmedContent = textContent.trim();
+
+    if (!trimmedContent) {
+      return null;
+    }
+
+    normalized.push({
+      role,
+      content: trimmedContent,
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeMessages(rawMessages) {
+  if (!Array.isArray(rawMessages)) {
+    return null;
+  }
+
+  const normalized = [];
+
+  for (let index = 0; index < rawMessages.length; index += 1) {
+    const entry = rawMessages[index];
+
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const rawRole = typeof entry.role === "string" ? entry.role.trim() : "";
+
+    if (!rawRole) {
+      return null;
+    }
+
+    const role = rawRole.toLowerCase();
+    const contentCandidate = entry.content;
+
+    let textContent = "";
+
+    if (Array.isArray(contentCandidate)) {
+      textContent = contentCandidate
+        .map((part) => {
+          if (typeof part === "string") {
+            return part;
+          }
+
+          if (part && typeof part.text === "string") {
+            return part.text;
+          }
+
+          return "";
+        })
+        .join("");
+    } else if (typeof contentCandidate === "string") {
+      textContent = contentCandidate;
+    } else if (contentCandidate && typeof contentCandidate === "object" && typeof contentCandidate.text === "string") {
+      textContent = contentCandidate.text;
+    } else if (contentCandidate !== undefined && contentCandidate !== null) {
+      textContent = String(contentCandidate);
+    }
+
+    const trimmedContent = textContent.trim();
+
+    if (!trimmedContent) {
+      return null;
+    }
+
+    normalized.push({
+      role,
+      content: trimmedContent,
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeMessages(rawMessages) {
+  if (!Array.isArray(rawMessages)) {
+    return null;
+  }
+
+  const normalized = [];
+
+  for (let index = 0; index < rawMessages.length; index += 1) {
+    const entry = rawMessages[index];
+
+    if (!entry || typeof entry !== "object") {
+      return null;
+    }
+
+    const rawRole = typeof entry.role === "string" ? entry.role.trim() : "";
+
+    if (!rawRole) {
+      return null;
+    }
+
+    const role = rawRole.toLowerCase();
+    const contentCandidate = entry.content;
+
+    let textContent = "";
+
+    if (Array.isArray(contentCandidate)) {
+      textContent = contentCandidate
+        .map((part) => {
+          if (typeof part === "string") {
+            return part;
+          }
+
+          if (part && typeof part.text === "string") {
+            return part.text;
+          }
+
+          return "";
+        })
+        .join("");
+    } else if (typeof contentCandidate === "string") {
+      textContent = contentCandidate;
+    } else if (contentCandidate && typeof contentCandidate === "object" && typeof contentCandidate.text === "string") {
+      textContent = contentCandidate.text;
+    } else if (contentCandidate !== undefined && contentCandidate !== null) {
+      textContent = String(contentCandidate);
+    }
+
+    const trimmedContent = textContent.trim();
+
+    if (!trimmedContent) {
+      return null;
+    }
+
+    normalized.push({
+      role,
+      content: trimmedContent,
+    });
+  }
+
+  return normalized;
+}
 
 function normalizeMessages(rawMessages) {
   if (!Array.isArray(rawMessages)) {
@@ -90,7 +276,7 @@ export const chat = async (req, res) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek/deepseek-chat-v3.1:free",
         messages: normalizedMessages,
         max_tokens: 300,
         temperature: 0.7,

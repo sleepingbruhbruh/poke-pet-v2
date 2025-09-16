@@ -615,13 +615,17 @@ async function initApp() {
     return;
   }
 
+  appRoot.innerHTML = "";
+
   displayMessages.splice(0);
   conversationHistory.splice(0);
+
+  const backendURL = await resolveBackendURL();
 
   let user;
 
   try {
-    user = await loadUserProfile();
+    user = await bootstrapUserSelection(appRoot, backendURL);
   } catch (error) {
     console.error(error);
     const errorMessage =

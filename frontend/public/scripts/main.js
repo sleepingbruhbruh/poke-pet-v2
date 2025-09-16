@@ -1100,8 +1100,8 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       continue;
     }
 
-    if (existingUser) 
-      storeCachedUsername(existingUser.id ?? username);n
+    if (existingUser) {
+      storeCachedUsername(existingUser.id ?? username);
       return existingUser;
     }
 

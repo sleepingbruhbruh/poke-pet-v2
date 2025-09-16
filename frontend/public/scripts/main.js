@@ -482,7 +482,7 @@ function formatConversationContext(history, { trainerName, petName }) {
   return transcript.join("\n");
 }
 
-function buildRoleplayPrompt({ userInput, species, friendship, context, nickname }) {
+function buildRoleplayPrompt({ userInput, species, friendship, context }) {
   const resolvedInput = typeof userInput === "string" ? userInput : String(userInput ?? "");
   const resolvedSpecies = typeof species === "string" && species.trim()
     ? species.trim()
@@ -490,9 +490,6 @@ function buildRoleplayPrompt({ userInput, species, friendship, context, nickname
   const boundedFriendship = clampFriendship(friendship);
   const contextString = typeof context === "string" ? context.trim() : "";
   const resolvedContext = contextString || "(no previous messages yet)";
-  const resolvedNickname = typeof nickname === "string" && nickname.trim()
-    ? nickname.trim()
-    : "Companion";
 
   return [
     "Pokémon roleplay",
@@ -502,7 +499,6 @@ function buildRoleplayPrompt({ userInput, species, friendship, context, nickname
     "",
     `User Input: ${resolvedInput}`,
     `Your Persona: ${resolvedSpecies}`,
-    `nickname: ${resolvedNickname}`,
     `Your Friendship: ${boundedFriendship}`,
     `Context: ${resolvedContext}`,
     "",
@@ -1520,7 +1516,6 @@ function buildChatSection({ user, pet, backendURL }) {
       species: petSpecies,
       friendship: pet?.friendship ?? 0,
       context: conversationContext,
-      nickname: companionDisplayName,
     });
 
     const requestMessages = [];

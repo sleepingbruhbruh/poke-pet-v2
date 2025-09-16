@@ -101,7 +101,7 @@ export const updatePet = async (req, res) => {
   }
 
   const updatedPet = {
-    _id: id,
+    _id: payload._id ?? id,
     name: rawName,
     stage: resolvedStage,
     friendship: resolvedFriendship,

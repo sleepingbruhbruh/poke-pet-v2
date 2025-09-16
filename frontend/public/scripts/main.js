@@ -1274,8 +1274,8 @@ function buildProfileColumn({ user, pet }) {
 
   const infoRows = [
     createInfoRow("Species", speciesFromPet),
-    createInfoRow("Trainer", ownerId),
-    createInfoRow("Last talked to", lastChattedDisplay),
+    createInfoRow("Owner", ownerId),
+    createInfoRow("Last-chatted", lastChattedDisplay),
   ];
 
   const talkingStreakDisplay = `${getTalkingStreakValue(activePet)} days`;
@@ -1571,16 +1571,21 @@ function buildChatSection({ user, pet, backendURL }) {
     children: [inputField, sendButton],
   });
 
-  const headerTitle = pet
-    ? `Chatting with ${companionDisplayName}`
-    : "Chatting with your companion";
-
   const headerChildren = [
     createElement("div", {
       className: "chat-header-title",
-      textContent: headerTitle,
+      textContent: `Trainer: ${user.id}`,
     }),
   ];
+
+  if (pet) {
+    headerChildren.push(
+      createElement("div", {
+        className: "chat-header-subtitle",
+        textContent: `Chatting with ${pet.name}`,
+      }),
+    );
+  }
 
   const chatHeader = createElement("div", {
     className: "chat-header",

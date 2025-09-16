@@ -18,7 +18,7 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
   const activePet = selectActivePet(user);
 
   if (!activePet) {
-    return { user, pet: null, messages: [] };
+    return { user, pet: null, messages: [], evolution: null };
   }
 
   const now = new Date();
@@ -29,7 +29,7 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
 
   if (!petIdentifier) {
     console.warn("Unable to update pet without identifier.");
-    return { user, pet: activePet, messages: [] };
+    return { user, pet: activePet, messages: [], evolution: null };
   }
 
   let lastChattedDate = null;
@@ -70,6 +70,7 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
   const stageBefore = Number.isFinite(stageValue) ? stageValue : 1;
   let stageAfter = stageBefore;
   let evolutionMessage = null;
+  let pendingEvolution = null;
 
   if (originalFriendship <= 0) {
     await deleteTrainerPet(backendURL, user.id, petIdentifier);
@@ -78,7 +79,8 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
     storeCachedUsername(refreshedUser.id ?? user.id);
     const refreshedPet = selectActivePet(refreshedUser);
 
-    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [] };
+    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [], evolution: null };
+
   }
 
   if (dayDifference === 1) {
@@ -119,10 +121,18 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
     const companionName = sanitizeIdentifier(activePet.name, "Your companion");
 
     evolutionMessage = `${companionName} has evolved from ${preSpecies} to ${postSpecies}!`;
+
+    pendingEvolution = {
+      petId: petIdentifier,
+      preSpecies,
+      postSpecies,
+      preImage: previousStageDetail?.image ?? null,
+      postImage: nextStageDetail?.image ?? null,
+    };
   }
 
   if (Object.keys(updates).length === 0) {
-    return { user, pet: activePet, messages: [] };
+    return { user, pet: activePet, messages: [], evolution: null };
   }
 
   if (updates.friendship !== undefined && updates.friendship <= 0) {
@@ -132,7 +142,7 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
     storeCachedUsername(refreshedUser.id ?? user.id);
     const refreshedPet = selectActivePet(refreshedUser);
 
-    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [] };
+    return { user: refreshedUser, pet: refreshedPet ?? null, messages: [], evolution: null };
   }
 
   const payload = { ...activePet, ...updates };
@@ -178,5 +188,5 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
 
   storeCachedUsername((resolvedUser && resolvedUser.id) ?? user.id);
 
-  return { user: resolvedUser, pet: refreshedPet, messages };
+  return { user: resolvedUser, pet: refreshedPet, messages, evolution: pendingEvolution };
 }

@@ -341,9 +341,19 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+.input-area .let-go-button {
+  background: linear-gradient(135deg, #ff6b6b 0%, #c62828 100%);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
 .input-area button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.input-area .let-go-button:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(198, 40, 40, 0.35);
 }
 
 .input-area button:disabled {

@@ -2,11 +2,18 @@ import { createElement } from "../dom.js";
 import { getStageDetail, selectActivePet } from "../pets.js";
 import { clampFriendship, getTalkingStreakValue, sanitizeIdentifier } from "../utils.js";
 
-function createInfoRow(label, value) {
+function createInfoRow(label, value, options = {}) {
+  const { valueAttributes = {} } = options;
+
   return createElement("div", {
     className: "info-row",
     children: [
       createElement("span", { className: "info-label", textContent: label }),
+      createElement("span", {
+        className: "info-value",
+        textContent: value,
+        attributes: valueAttributes,
+      }),
       createElement("span", { className: "info-value", textContent: value }),
     ],
   });
@@ -23,11 +30,15 @@ function buildFriendshipSection(friendshipValue) {
       createElement("span", {
         className: "friendship-value",
         textContent: `${clampedValue}/100`,
+        attributes: { "data-info": "friendship-score" },
       }),
     ],
   });
   const bar = createElement("div", { className: "friendship-bar" });
-  const fill = createElement("div", { className: "friendship-bar-fill" });
+  const fill = createElement("div", {
+    className: "friendship-bar-fill",
+    attributes: { "data-info": "friendship-progress" },
+  });
   fill.style.width = `${clampedValue}%`;
   bar.appendChild(fill);
   wrapper.appendChild(header);
@@ -58,21 +69,46 @@ function resolveLastChattedDisplay(lastChattedRaw) {
   return "—";
 }
 
-export function buildProfileColumn({ user, pet }) {
+export function buildProfileColumn({ user, pet, evolution = null }) {
   const column = createElement("div", { className: "profile-column" });
   const activePet = pet ?? selectActivePet(user);
   const stageDetail = getStageDetail(activePet?.stage);
+  const activePetId = sanitizeIdentifier(activePet?._id ?? activePet?.id, "");
+
+  const evolutionPetId =
+    evolution && typeof evolution.petId === "string" && evolution.petId.trim()
+      ? evolution.petId.trim()
+      : "";
+  const shouldShowEvolution = Boolean(activePet && activePetId && evolutionPetId && activePetId === evolutionPetId);
 
   const petName =
     activePet && typeof activePet.name === "string" && activePet.name.trim()
       ? activePet.name.trim()
       : "Your Companion";
 
+  let avatarSrc = stageDetail.image;
+  let avatarSpecies = stageDetail.species;
+
+  if (shouldShowEvolution) {
+    const preImage = typeof evolution.preImage === "string" && evolution.preImage.trim() ? evolution.preImage : null;
+    const preSpecies = typeof evolution.preSpecies === "string" && evolution.preSpecies.trim()
+      ? evolution.preSpecies.trim()
+      : null;
+
+    if (preImage) {
+      avatarSrc = preImage;
+    }
+
+    if (preSpecies) {
+      avatarSpecies = preSpecies;
+    }
+  }
+
   const avatar = createElement("img", {
     className: "pet-avatar",
     attributes: {
-      src: stageDetail.image,
-      alt: `${stageDetail.species} avatar`,
+      src: avatarSrc,
+      alt: `${avatarSpecies} avatar`,
     },
   });
 
@@ -109,7 +145,9 @@ export function buildProfileColumn({ user, pet }) {
   const infoRows = [
     createInfoRow("Species", speciesFromPet),
     createInfoRow("Owner", ownerId),
-    createInfoRow("Last-chatted", lastChattedDisplay),
+    createInfoRow("Last-chatted", lastChattedDisplay, {
+      valueAttributes: { "data-info": "last-chatted" },
+    }),
   ];
 
   const talkingStreakDisplay = `${getTalkingStreakValue(activePet)} days`;
@@ -126,6 +164,24 @@ export function buildProfileColumn({ user, pet }) {
       children: infoCardChildren,
     }),
   );
+
+  if (shouldShowEvolution && typeof window !== "undefined" && typeof window.alert === "function") {
+    const postSpecies =
+      typeof evolution.postSpecies === "string" && evolution.postSpecies.trim()
+        ? evolution.postSpecies.trim()
+        : stageDetail.species;
+    const postImage =
+      typeof evolution.postImage === "string" && evolution.postImage.trim()
+        ? evolution.postImage
+        : stageDetail.image;
+
+    setTimeout(() => {
+      window.alert("Your Pokemon is evolving!?");
+      window.alert(`Congratulations, your pokemon has evolved into ${postSpecies}`);
+      avatar.setAttribute("src", postImage);
+      avatar.setAttribute("alt", `${postSpecies} avatar`);
+    }, 0);
+  }
 
   return column;
 }

@@ -379,6 +379,72 @@ function normalizeUserRecord(rawUser) {
   };
 }
 
+function formatConversationContext(history, { trainerName, petName }) {
+  const safeTrainerName = sanitizeIdentifier(trainerName, "Trainer");
+  const safePetName = sanitizeIdentifier(petName, "Companion");
+
+  if (!Array.isArray(history) || history.length === 0) {
+    return "";
+  }
+
+  const transcript = [];
+
+  history.forEach((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return;
+    }
+
+    const { role, content } = entry;
+
+    if (typeof content !== "string") {
+      return;
+    }
+
+    const trimmedContent = content.trim();
+
+    if (!trimmedContent) {
+      return;
+    }
+
+    if (role === "user") {
+      transcript.push(`${safeTrainerName}: ${trimmedContent}`);
+    } else if (role === "assistant") {
+      transcript.push(`${safePetName}: ${trimmedContent}`);
+    }
+  });
+
+  return transcript.join("\n");
+}
+
+function buildRoleplayPrompt({ userInput, species, friendship, context }) {
+  const resolvedInput = typeof userInput === "string" ? userInput : String(userInput ?? "");
+  const resolvedSpecies = typeof species === "string" && species.trim()
+    ? species.trim()
+    : "Pokémon";
+  const boundedFriendship = clampFriendship(friendship);
+  const contextString = typeof context === "string" ? context.trim() : "";
+  const resolvedContext = contextString || "(no previous messages yet)";
+
+  return [
+    "Pokémon roleplay",
+    "🎯 Objective:",
+    "Generate a realistic response that a pokemon would make if its able to talk, in the same language as user input for a specified Your Persona being a pokemon species.",
+    "The output will be a concise 2-3 sentences response.",
+    "",
+    `User Input: ${resolvedInput}`,
+    `Your Persona: ${resolvedSpecies}`,
+    `Your Friendship: ${boundedFriendship}`,
+    `Context: ${resolvedContext}`,
+    "",
+    "📌 General Rules:",
+    "",
+    "    Context is the previous chat history in the user current session.",
+    "    your personality depends on friendship score (1 being the saddest/most negative, 50 being neutral and 100 being the most happy/positive)",
+    "    answer in a concise 2-3 sentences response. Except only when the output wouldn't meet user demand in just 2-3 sentences.",
+    "    Output only the messages in the same language as user input (no explanations, no JSON, no prose).",
+  ].join("\n");
+}
+
 async function fetchUserRecord(backendURL, username) {
   const base = backendURL.replace(/\/$/, "");
   const encoded = encodeURIComponent(username);
@@ -779,6 +845,28 @@ function getStageDetail(stageValue) {
   return DEFAULT_STAGE_DETAIL;
 }
 
+function resolvePetSpecies(pet) {
+  if (pet && typeof pet.species === "string") {
+    const trimmedSpecies = pet.species.trim();
+
+    if (trimmedSpecies) {
+      return trimmedSpecies;
+    }
+  }
+
+  const stageDetail = getStageDetail(pet?.stage);
+
+  if (stageDetail && typeof stageDetail.species === "string") {
+    const trimmedFromStage = stageDetail.species.trim();
+
+    if (trimmedFromStage) {
+      return trimmedFromStage;
+    }
+  }
+
+  return DEFAULT_STAGE_DETAIL.species;
+}
+
 function createInfoRow(label, value) {
   return createElement("div", {
     className: "info-row",
@@ -949,21 +1037,45 @@ function buildChatSection({ user, pet, backendURL }) {
       return;
     }
 
-    const senderName = user.id;
-    appendMessage({ sender: senderName, message: trimmedMessage }, chatBox);
+    const trainerDisplayName = sanitizeIdentifier(user.id, "Trainer");
+    const petSpecies = resolvePetSpecies(pet);
+    const companionDisplayName = sanitizeIdentifier(pet?.name, petSpecies);
+    const personaContext =
+      pet && typeof pet.context === "string" && pet.context.trim()
+        ? pet.context.trim()
+        : "";
+    const conversationContext = formatConversationContext(conversationHistory, {
+      trainerName: trainerDisplayName,
+      petName: companionDisplayName,
+    });
+    const promptMessage = buildRoleplayPrompt({
+      userInput: trimmedMessage,
+      species: petSpecies,
+      friendship: pet?.friendship ?? 0,
+      context: conversationContext,
+    });
+
+    const requestMessages = [];
+
+    if (personaContext) {
+      requestMessages.push({ role: "system", content: personaContext });
+    }
+
+    requestMessages.push({ role: "user", content: promptMessage });
+
+    appendMessage({ sender: trainerDisplayName, message: trimmedMessage }, chatBox);
     conversationHistory.push({ role: "user", content: trimmedMessage });
 
     inputField.value = "";
     setSendingState(true);
 
     try {
-      const response = await requestChatCompletion(backendURL, conversationHistory);
+      const response = await requestChatCompletion(backendURL, requestMessages);
       const assistantText = extractAssistantMessage(response);
 
       if (assistantText) {
         conversationHistory.push({ role: "assistant", content: assistantText });
-        const petName = pet?.name ? String(pet.name) : "Pet";
-        appendMessage({ sender: petName, message: assistantText }, chatBox);
+        appendMessage({ sender: companionDisplayName, message: assistantText }, chatBox);
       } else {
         appendMessage(
           {
@@ -1078,10 +1190,6 @@ async function initApp() {
   }
 
   const activePet = selectActivePet(user);
-
-  if (activePet?.context) {
-    conversationHistory.push({ role: "system", content: activePet.context });
-  }
 
   const introMessage = activePet
     ? `${activePet.name} perks up, ready to chat.`

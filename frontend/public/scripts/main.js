@@ -1571,16 +1571,21 @@ function buildChatSection({ user, pet, backendURL }) {
     children: [inputField, sendButton],
   });
 
-  const chatTitleText = pet
-    ? `Chatting with ${companionDisplayName}`
-    : "Chatting with your pet";
-
   const headerChildren = [
     createElement("div", {
       className: "chat-header-title",
-      textContent: chatTitleText,
+      textContent: `Trainer: ${user.id}`,
     }),
   ];
+
+  if (pet) {
+    headerChildren.push(
+      createElement("div", {
+        className: "chat-header-subtitle",
+        textContent: `Chatting with ${pet.name}`,
+      }),
+    );
+  }
 
   const chatHeader = createElement("div", {
     className: "chat-header",

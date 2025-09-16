@@ -4,8 +4,7 @@ const displayMessages = [];
 const conversationHistory = [];
 
 const TALKING_STREAK_FIELD = "talking-streak";
-const USERNAME_STORAGE_KEY = "user_id";
-const LEGACY_USERNAME_STORAGE_KEYS = ["poke-pet.username"];
+const USERNAME_STORAGE_KEY = "poke-pet.username";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const STAGE_DETAILS = {
@@ -252,19 +251,6 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
-function pruneLegacyUsernameCaches() {
-  if (typeof localStorage === "undefined") {
-    return;
-  }
-
-  LEGACY_USERNAME_STORAGE_KEYS.forEach((legacyKey) => {
-    try {
-      localStorage.removeItem(legacyKey);
-    } catch (error) {
-      console.warn(`Failed to clear legacy cached username for key "${legacyKey}":`, error);
-    }
-  });
-}
 
 function loadCachedUsername() {
   if (typeof localStorage === "undefined") {
@@ -272,7 +258,6 @@ function loadCachedUsername() {
   }
 
   try {
-    pruneLegacyUsernameCaches();
     const rawValue = localStorage.getItem(USERNAME_STORAGE_KEY);
     return sanitizeIdentifier(rawValue, "");
   } catch (error) {
@@ -297,8 +282,6 @@ function storeCachedUsername(username) {
   } catch (error) {
     console.warn("Failed to store cached username:", error);
   }
-
-  pruneLegacyUsernameCaches();
 }
 
 function clearCachedUsername() {
@@ -311,8 +294,6 @@ function clearCachedUsername() {
   } catch (error) {
     console.warn("Failed to clear cached username:", error);
   }
-
-  pruneLegacyUsernameCaches();
 }
 
 function getTalkingStreakValue(pet) {
@@ -1122,9 +1103,9 @@ async function bootstrapUserSelection(appRoot, backendURL) {
       );
       continue;
     }
-    
-    if (existingUser) {
-      storeCachedUsername(existingUser.id ?? username);
+
+    if (existingUser) 
+      storeCachedUsername(existingUser.id ?? username);n
       return existingUser;
     }
 

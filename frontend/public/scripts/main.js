@@ -232,6 +232,7 @@ function extractAssistantMessage(response) {
   return null;
 }
 
+// Profile data is sourced from the static placeholder while the backend matures.
 
 function sanitizeIdentifier(value, fallback = "") {
   if (typeof value === "string") {
@@ -247,36 +248,18 @@ function sanitizeIdentifier(value, fallback = "") {
   return normalized || fallback;
 }
 
-async function readResponseMessage(response, fallbackMessage = "") {
-  const fallback = typeof fallbackMessage === "string" ? fallbackMessage : "";
-  const rawText = await response.text().catch(() => "");
-  const trimmedText = rawText.trim();
-
-  if (!trimmedText) {
-    return fallback;
-  }
-
-  try {
-    const parsed = JSON.parse(trimmedText);
-
-    if (parsed && typeof parsed.message === "string") {
-      const parsedMessage = parsed.message.trim();
-      return parsedMessage || fallback;
-    }
-  } catch {
-    // Ignore JSON parsing errors and fall back to the raw text.
-  }
-
-  return trimmedText;
-}
-
 function normalizeUserRecord(rawUser) {
   if (!rawUser || typeof rawUser !== "object") {
     throw new Error("User record is missing or malformed.");
   }
 
   const resolvedId = sanitizeIdentifier(rawUser._id ?? rawUser.id ?? rawUser.name, "Player");
-  const rawPets = Array.isArray(rawUser.pets) ? rawUser.pets : [];
+  const petsSource = rawUser.pets;
+  const rawPets = Array.isArray(petsSource)
+    ? petsSource
+    : petsSource && typeof petsSource === "object"
+      ? [petsSource]
+      : [];
 
   const pets = rawPets
     .filter((pet) => pet && typeof pet === "object")
@@ -327,314 +310,22 @@ function normalizeUserRecord(rawUser) {
   };
 }
 
-async function fetchUserRecord(backendURL, username) {
-  const base = backendURL.replace(/\/$/, "");
-  const encoded = encodeURIComponent(username);
-  const response = await fetch(`${base}/users/${encoded}`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (response.status === 404) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
-  }
+async function loadUserProfile() {
+  const response = await fetch("./placeholder.json", { cache: "no-store" });
 
   if (!response.ok) {
-    const fallbackMessage = `Failed to load trainer (status ${response.status}).`;
-    const message = await readResponseMessage(response, fallbackMessage);
-    const error = new Error(message || fallbackMessage);
-    error.status = response.status;
-    throw error;
+    throw new Error(`Failed to load user info (status ${response.status}).`);
   }
 
   const payload = await response.json().catch(() => null);
 
   if (!payload) {
-    const error = new Error(`Trainer "${username}" was not found.`);
-    error.status = 404;
-    throw error;
+    throw new Error("Placeholder user info is missing or invalid.");
   }
 
-  return normalizeUserRecord(payload);
-}
+  const rawUser = payload.user ?? payload.currentUser ?? payload;
 
-async function createUserRecord(backendURL, username, petName) {
-  const base = backendURL.replace(/\/$/, "");
-  const trainerId = sanitizeIdentifier(username);
-  const companionName = sanitizeIdentifier(petName);
-
-  const response = await fetch(`${base}/users`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ name: trainerId, petName: companionName }),
-  });
-
-  if (response.status === 409) {
-    const existing = await response.json().catch(() => null);
-    const error = new Error(`Trainer "${trainerId}" already exists.`);
-    error.status = 409;
-    error.payload = existing;
-    throw error;
-  }
-
-  if (!response.ok) {
-    const fallbackMessage = `Failed to create trainer (status ${response.status}).`;
-    const message = await readResponseMessage(response, fallbackMessage);
-    const error = new Error(message || fallbackMessage);
-    error.status = response.status;
-    throw error;
-  }
-
-  const created = await response.json().catch(() => null);
-
-  return created ? normalizeUserRecord(created) : null;
-}
-
-function renderInputPrompt(appRoot, options) {
-  const {
-    lead,
-    title,
-    description,
-    placeholder = "Value",
-    initialValue = "",
-    errorMessage = "",
-    submitLabel = "→",
-    submitAriaLabel = "Submit",
-  } = options ?? {};
-
-  return new Promise((resolve) => {
-    appRoot.innerHTML = "";
-
-    const container = createElement("div", { className: "prompt-container" });
-    const card = createElement("div", { className: "prompt-card" });
-
-    if (lead) {
-      card.appendChild(createElement("p", { className: "prompt-lead", textContent: lead }));
-    }
-
-    if (title) {
-      card.appendChild(createElement("h1", { className: "prompt-title", textContent: title }));
-    }
-
-    if (description) {
-      card.appendChild(createElement("p", { className: "prompt-description", textContent: description }));
-    }
-
-    const form = createElement("form", { className: "prompt-form" });
-    const inputWrapper = createElement("div", { className: "prompt-input-wrapper" });
-
-    const input = createElement("input", {
-      className: "prompt-input",
-      attributes: {
-        type: "text",
-        placeholder,
-        autocomplete: "off",
-      },
-    });
-
-    if (initialValue) {
-      input.value = initialValue;
-    }
-
-    const clearButton = createElement("button", {
-      className: "prompt-clear-button",
-      textContent: "×",
-      attributes: {
-        type: "button",
-        "aria-label": "Clear input",
-      },
-    });
-
-    const submitButton = createElement("button", {
-      className: "prompt-submit-button",
-      textContent: submitLabel,
-      attributes: {
-        type: "submit",
-        "aria-label": submitAriaLabel,
-      },
-    });
-
-    inputWrapper.appendChild(input);
-    inputWrapper.appendChild(clearButton);
-    inputWrapper.appendChild(submitButton);
-
-    const errorElement = createElement("div", {
-      className: `prompt-error${errorMessage ? "" : " is-hidden"}`,
-      textContent: errorMessage,
-      attributes: { role: "alert" },
-    });
-
-    form.appendChild(inputWrapper);
-    form.appendChild(errorElement);
-
-    card.appendChild(form);
-    container.appendChild(card);
-    appRoot.appendChild(container);
-
-    function showError(message) {
-      if (message) {
-        errorElement.textContent = message;
-        errorElement.classList.remove("is-hidden");
-      } else {
-        errorElement.textContent = "";
-        errorElement.classList.add("is-hidden");
-      }
-    }
-
-    function updateClearButtonState() {
-      const hasValue = input.value.length > 0;
-      clearButton.disabled = !hasValue;
-    }
-
-    clearButton.addEventListener("click", () => {
-      input.value = "";
-      updateClearButtonState();
-      showError("");
-      input.focus();
-    });
-
-    input.addEventListener("input", () => {
-      updateClearButtonState();
-      if (!errorElement.classList.contains("is-hidden")) {
-        showError("");
-      }
-    });
-
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-
-      const trimmedValue = input.value.trim();
-
-      if (!trimmedValue) {
-        showError("Please enter a value.");
-        return;
-      }
-
-      input.disabled = true;
-      clearButton.disabled = true;
-      submitButton.disabled = true;
-
-      resolve(trimmedValue);
-    });
-
-    updateClearButtonState();
-    input.focus();
-  });
-}
-
-function promptForUsername(appRoot, { initialValue = "", errorMessage = "" } = {}) {
-  return renderInputPrompt(appRoot, {
-    title: "Enter username",
-    placeholder: "Value",
-    initialValue,
-    errorMessage,
-    submitLabel: "→",
-    submitAriaLabel: "Confirm username",
-  });
-}
-
-function promptForPetName(appRoot, { initialValue = "", errorMessage = "" } = {}) {
-  return renderInputPrompt(appRoot, {
-    lead: "Looks like you currently don't own a Pokémon.",
-    title: "Enter your new pokemon name",
-    placeholder: "Value",
-    initialValue,
-    errorMessage,
-    submitLabel: "→",
-    submitAriaLabel: "Confirm Pokémon name",
-  });
-}
-
-async function handleUserCreation(appRoot, backendURL, username) {
-  let petName = "";
-  let errorMessage = "";
-
-  // Loop until creation succeeds so the user can retry when validation fails.
-  while (true) {
-    petName = await promptForPetName(appRoot, { initialValue: petName, errorMessage });
-    errorMessage = "";
-
-    try {
-      await createUserRecord(backendURL, username, petName);
-    } catch (error) {
-      if (error && error.status === 409) {
-        if (error.payload) {
-          try {
-            return normalizeUserRecord(error.payload);
-          } catch (normalizeError) {
-            console.error("Failed to normalize existing trainer:", normalizeError);
-          }
-        }
-
-        try {
-          return await fetchUserRecord(backendURL, username);
-        } catch (fetchError) {
-          errorMessage =
-            fetchError instanceof Error && fetchError.message
-              ? fetchError.message
-              : "We couldn't load your trainer. Please try again.";
-          continue;
-        }
-      }
-
-      errorMessage =
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to create your Pokémon. Please try again.";
-      continue;
-    }
-
-    try {
-      return await fetchUserRecord(backendURL, username);
-    } catch (fetchError) {
-      errorMessage =
-        fetchError instanceof Error && fetchError.message
-          ? fetchError.message
-          : "We couldn't load your trainer. Please try again.";
-    }
-  }
-}
-
-async function bootstrapUserSelection(appRoot, backendURL) {
-  let username = "";
-  let errorMessage = "";
-
-  while (true) {
-    username = await promptForUsername(appRoot, { initialValue: username, errorMessage });
-    errorMessage = "";
-
-    try {
-      return await fetchUserRecord(backendURL, username);
-    } catch (error) {
-      if (error && error.status === 404) {
-        try {
-          const createdUser = await handleUserCreation(appRoot, backendURL, username);
-
-          if (createdUser) {
-            return createdUser;
-          }
-
-          errorMessage = "We couldn't create the trainer. Please try again.";
-        } catch (creationError) {
-          errorMessage =
-            creationError instanceof Error && creationError.message
-              ? creationError.message
-              : "We couldn't create the trainer. Please try again.";
-        }
-      } else {
-        errorMessage =
-          error instanceof Error && error.message
-            ? error.message
-            : "Unable to look up that trainer. Please try again.";
-      }
-    }
-  }
+  return normalizeUserRecord(rawUser);
 }
 
 function selectActivePet(user) {
@@ -948,6 +639,8 @@ async function initApp() {
     );
     return;
   }
+
+  const backendURL = await resolveBackendURL();
 
   const activePet = selectActivePet(user);
 

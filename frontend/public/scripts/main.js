@@ -1131,6 +1131,7 @@ async function bootstrapUserSelection(appRoot, backendURL) {
     try {
       const createdUser = await handleUserCreation(appRoot, backendURL, username);
 
+
       if (createdUser) {
         storeCachedUsername(createdUser.id ?? username);
         return createdUser;

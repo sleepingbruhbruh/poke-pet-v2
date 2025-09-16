@@ -48,7 +48,6 @@ function updateCurrentUserBadge(username) {
   badge.textContent = `Currently logged in as: ${safeName}`;
   badge.classList.remove("is-hidden");
 }
-
 async function initApp() {
   const appRoot = document.querySelector("#app");
 

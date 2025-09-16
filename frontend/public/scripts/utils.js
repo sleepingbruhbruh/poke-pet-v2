@@ -39,6 +39,20 @@ export function clampFriendship(value) {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
+export function getFriendshipTier(value) {
+  const bounded = clampFriendship(value);
+
+  if (bounded <= 33) {
+    return "low";
+  }
+
+  if (bounded <= 66) {
+    return "medium";
+  }
+
+  return "high";
+}
+
 export function formatConversationContext(history, { trainerName, petName }) {
   const safeTrainerName = sanitizeIdentifier(trainerName, "Trainer");
   const safePetName = sanitizeIdentifier(petName, "Companion");

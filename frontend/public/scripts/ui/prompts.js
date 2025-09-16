@@ -173,7 +173,7 @@ export function showRunAwayPrompt(appRoot, petName) {
     });
 
     const button = createElement("button", {
-      className: "prompt-submit-button",
+      className: "prompt-submit-button prompt-runaway-button",
       textContent: "Ok..",
       attributes: {
         type: "button",
@@ -181,13 +181,13 @@ export function showRunAwayPrompt(appRoot, petName) {
       },
     });
 
-    const buttonWrapper = createElement("div", {
-      className: "prompt-input-wrapper",
-      children: [button],
-    });
-
     card.appendChild(title);
-    card.appendChild(buttonWrapper);
+    card.appendChild(
+      createElement("div", {
+        className: "prompt-runaway-actions",
+        children: [button],
+      }),
+    );
     container.appendChild(card);
     appRoot.appendChild(container);
 

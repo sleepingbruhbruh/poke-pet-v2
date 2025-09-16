@@ -3,7 +3,7 @@
 }
 
 :root {
-  font-family: "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Prompt", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #1f1f1f;
 }
 
@@ -15,16 +15,45 @@ body {
   justify-content: center;
   align-items: center;
   padding: 48px 24px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+#current-user-badge,
+.current-user-indicator {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  font-size: 16px;
+  color: #6c6c6c;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  z-index: 1000;
+  pointer-events: none;
+  text-align: right;
 }
 
 #app {
   width: 100%;
   display: flex;
   justify-content: center;
+  position: relative;
 }
 
 .prompt-container {
   width: min(420px, 100%);
+}
+
+.prompt-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1200;
 }
 
 .prompt-card {
@@ -37,6 +66,17 @@ body {
   gap: 24px;
   align-items: stretch;
   text-align: center;
+}
+
+.prompt-card--overlay {
+  width: min(420px, 100%);
+  max-width: 420px;
+  gap: 28px;
+  text-align: center;
+}
+
+.prompt-card--overlay .prompt-title {
+  font-size: 24px;
 }
 
 .prompt-lead {
@@ -90,26 +130,6 @@ body {
   color: #9e9e9e;
 }
 
-.prompt-clear-button {
-  border: none;
-  background: transparent;
-  color: #9e9e9e;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-  transition: color 0.15s ease;
-}
-
-.prompt-clear-button:hover:not(:disabled) {
-  color: #5f5f5f;
-}
-
-.prompt-clear-button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 .prompt-submit-button {
   border: none;
   border-radius: 14px;
@@ -122,8 +142,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
   cursor: pointer;
+  flex-shrink: 0;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.prompt-runaway-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.prompt-runaway-button {
+  width: 72px;
+  height: 72px;
+  font-size: 21px;
 }
 
 .prompt-submit-button:hover:not(:disabled) {
@@ -244,8 +277,20 @@ body {
 .friendship-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #81c784 0%, #43a047 100%);
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, #81c784 0%, #388e3c 100%);
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.friendship-bar-fill--low {
+  background: linear-gradient(90deg, #ef5350 0%, #c62828 100%);
+}
+
+.friendship-bar-fill--medium {
+  background: linear-gradient(90deg, #ffd54f 0%, #fbc02d 100%);
+}
+
+.friendship-bar-fill--high {
+  background: linear-gradient(90deg, #81c784 0%, #388e3c 100%);
 }
 
 .friendship-value {
@@ -267,6 +312,9 @@ body {
   padding: 28px;
   box-shadow: 0 18px 45px rgba(31, 31, 31, 0.12);
   min-height: 520px;
+  height: clamp(520px, 70vh, 720px);
+  width: 100%;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -295,21 +343,32 @@ body {
   overflow-y: auto;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
   margin-bottom: 18px;
+  min-height: 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .message {
   margin-bottom: 12px;
   line-height: 1.45;
   color: #333333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .message strong {
   color: #1b1b1b;
 }
 
+.message--system {
+  color: #5f5f5f;
+}
+
 .input-area {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 14px;
   background: #ffffff;
   border-radius: 18px;
@@ -321,6 +380,7 @@ body {
   border: none;
   outline: none;
   flex: 1;
+  min-width: 0;
   font-size: 15px;
   color: #2b2b2b;
   background: transparent;
@@ -330,7 +390,8 @@ body {
   color: #9e9e9e;
 }
 
-.input-area button {
+.input-area button,
+.chat-actions button {
   border: none;
   border-radius: 12px;
   background: linear-gradient(135deg, #ffd95b 0%, #f9a825 100%);
@@ -338,28 +399,60 @@ body {
   font-weight: 700;
   padding: 10px 20px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.input-area .let-go-button {
+.input-area button:hover:not(:disabled),
+.chat-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.input-area button:disabled,
+.chat-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chat-actions .logout-button {
+  background: linear-gradient(135deg, #64b5f6 0%, #1976d2 100%);
+  color: #ffffff;
+}
+
+.chat-actions .logout-button:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.35);
+}
+
+.chat-actions .let-go-button {
   background: linear-gradient(135deg, #ff6b6b 0%, #c62828 100%);
   color: #ffffff;
   white-space: nowrap;
 }
 
-.input-area button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-}
-
-.input-area .let-go-button:hover:not(:disabled) {
+.chat-actions .let-go-button:hover:not(:disabled) {
   box-shadow: 0 6px 18px rgba(198, 40, 40, 0.35);
 }
 
-.input-area button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  box-shadow: none;
+.send-button {
+  padding: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .error-message {
@@ -381,12 +474,47 @@ body {
     gap: 24px;
   }
 
-  .pet-card,
   .chat-wrapper {
+    height: clamp(480px, 72vh, 640px);
+  }
+
+  .pet-card {
     align-items: center;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 20px 12px;
   }
 
   .chat-wrapper {
-    min-height: 460px;
+    padding: 20px 16px;
+    border-radius: 20px;
+    height: clamp(240px, calc(100vh - 140px), 560px);
+  }
+
+  .chat-box {
+    padding: 12px;
+  }
+
+  .input-area {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .send-button {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .chat-actions {
+    gap: 10px;
+  }
+
+  .pet-avatar {
+    width: min(180px, 52vw);
+    height: min(180px, 52vw);
   }
 }

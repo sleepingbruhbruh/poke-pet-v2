@@ -6,11 +6,12 @@ import { conversationHistory, displayMessages } from "../state.js";
 import {
   buildRoleplayPrompt,
   clampFriendship,
+  getFriendshipTier,
   formatConversationContext,
   sanitizeIdentifier,
 } from "../utils.js";
 
-export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
+export function buildChatSection({ user, pet, backendURL, onPetReleased, onLogout }) {
   const chatBox = createElement("div", { className: "chat-box" });
 
   const inputField = createElement("input", {
@@ -21,7 +22,8 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
   });
 
   const sendButton = createElement("button", {
-    textContent: "Send",
+    className: "send-button",
+    textContent: "→",
     attributes: {
       type: "button",
       "aria-label": "Send message",
@@ -42,12 +44,22 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
     },
   });
 
+  const logoutButton = createElement("button", {
+    className: "logout-button",
+    textContent: "Log out",
+    attributes: {
+      type: "button",
+      "aria-label": "Log out",
+    },
+  });
+
   let sending = false;
   let releasing = false;
   let hasUpdatedFirstMessage = !pet;
+  let loggingOut = false;
 
   function updateControlStates() {
-    const busy = sending || releasing;
+    const busy = sending || releasing || loggingOut;
     inputField.disabled = busy;
     sendButton.disabled = busy;
 
@@ -55,13 +67,18 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
       const cannotRelease = !pet || typeof onPetReleased !== "function";
       releaseButton.disabled = busy || cannotRelease;
     }
+
+    if (logoutButton) {
+      const cannotLogout = typeof onLogout !== "function";
+      logoutButton.disabled = busy || cannotLogout;
+    }
   }
 
   function setSendingState(active) {
     sending = active;
     updateControlStates();
 
-    if (!sending && !releasing) {
+    if (!sending && !releasing && !loggingOut) {
       inputField.focus();
     }
   }
@@ -99,6 +116,14 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
 
     if (friendshipProgressElement) {
       friendshipProgressElement.style.width = `${boundedFriendship}%`;
+      const tier = getFriendshipTier(boundedFriendship);
+      friendshipProgressElement.dataset.friendshipTier = tier;
+      friendshipProgressElement.classList.remove(
+        "friendship-bar-fill--low",
+        "friendship-bar-fill--medium",
+        "friendship-bar-fill--high",
+      );
+      friendshipProgressElement.classList.add(`friendship-bar-fill--${tier}`);
     }
   }
 
@@ -140,7 +165,6 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
 
   async function ensureFirstMessageUpdate() {
     if (hasUpdatedFirstMessage || !pet) {
-      hasUpdatedFirstMessage = true;
       return;
     }
 
@@ -171,9 +195,9 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
       const message = error instanceof Error && error.message ? error.message : fallbackMessage;
       appendMessage({ sender: "System", message }, chatBox, displayMessages);
       throw error;
-    } finally {
-      hasUpdatedFirstMessage = true;
     }
+
+    hasUpdatedFirstMessage = true;
 
     pet.lastChatted = isoNow;
 
@@ -188,7 +212,7 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
   async function handleSend() {
     const trimmedMessage = inputField.value.trim();
 
-    if (!trimmedMessage || sending || releasing) {
+    if (!trimmedMessage || sending || releasing || loggingOut) {
       return;
     }
 
@@ -269,7 +293,7 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
   });
 
   async function handleRelease() {
-    if (releasing || !pet || typeof onPetReleased !== "function") {
+    if (releasing || loggingOut || !pet || typeof onPetReleased !== "function") {
       return;
     }
 
@@ -291,9 +315,37 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
 
   releaseButton.addEventListener("click", handleRelease);
 
+  async function handleLogout() {
+    if (loggingOut || typeof onLogout !== "function") {
+      return;
+    }
+
+    loggingOut = true;
+    updateControlStates();
+
+    try {
+      await onLogout();
+    } catch (error) {
+      console.error("Failed to log out:", error);
+      const fallbackMessage = "We couldn't sign you out right now. Please try again.";
+      const message = error instanceof Error && error.message ? error.message : fallbackMessage;
+      appendMessage({ sender: "System", message }, chatBox, displayMessages);
+    } finally {
+      loggingOut = false;
+      updateControlStates();
+    }
+  }
+
+  logoutButton.addEventListener("click", handleLogout);
+
   const inputArea = createElement("div", {
     className: "input-area",
-    children: [inputField, sendButton, releaseButton],
+    children: [inputField, sendButton],
+  });
+
+  const actionRow = createElement("div", {
+    className: "chat-actions",
+    children: [logoutButton, releaseButton],
   });
 
   const headerChildren = [
@@ -327,7 +379,7 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
   updateControlStates();
   const chatColumn = createElement("div", {
     className: "chat-column",
-    children: [chatWrapper],
+    children: [chatWrapper, actionRow],
   });
 
   return { section: chatColumn, inputField };

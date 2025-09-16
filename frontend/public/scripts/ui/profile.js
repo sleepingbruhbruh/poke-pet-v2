@@ -1,6 +1,12 @@
 import { createElement } from "../dom.js";
 import { getStageDetail, selectActivePet } from "../pets.js";
-import { clampFriendship, getTalkingStreakValue, sanitizeIdentifier } from "../utils.js";
+import {
+  clampFriendship,
+  getFriendshipTier,
+  getTalkingStreakValue,
+  sanitizeIdentifier,
+} from "../utils.js";
+import { showEvolutionSequence } from "./prompts.js";
 
 function createInfoRow(label, value, options = {}) {
   const { valueAttributes = {} } = options;
@@ -14,7 +20,6 @@ function createInfoRow(label, value, options = {}) {
         textContent: value,
         attributes: valueAttributes,
       }),
-      createElement("span", { className: "info-value", textContent: value }),
     ],
   });
 }
@@ -40,6 +45,9 @@ function buildFriendshipSection(friendshipValue) {
     attributes: { "data-info": "friendship-progress" },
   });
   fill.style.width = `${clampedValue}%`;
+  const tier = getFriendshipTier(clampedValue);
+  fill.classList.add(`friendship-bar-fill--${tier}`);
+  fill.dataset.friendshipTier = tier;
   bar.appendChild(fill);
   wrapper.appendChild(header);
   wrapper.appendChild(bar);
@@ -74,12 +82,9 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
   const activePet = pet ?? selectActivePet(user);
   const stageDetail = getStageDetail(activePet?.stage);
   const activePetId = sanitizeIdentifier(activePet?._id ?? activePet?.id, "");
-
-  const evolutionPetId =
-    evolution && typeof evolution.petId === "string" && evolution.petId.trim()
-      ? evolution.petId.trim()
-      : "";
-  const shouldShowEvolution = Boolean(activePet && activePetId && evolutionPetId && activePetId === evolutionPetId);
+  const evolutionPetId = sanitizeIdentifier(evolution?.petId, "");
+  const shouldShowEvolution =
+    Boolean(activePet && evolution) && (!activePetId || !evolutionPetId || activePetId === evolutionPetId);
 
   const petName =
     activePet && typeof activePet.name === "string" && activePet.name.trim()
@@ -165,7 +170,7 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
     }),
   );
 
-  if (shouldShowEvolution && typeof window !== "undefined" && typeof window.alert === "function") {
+  if (shouldShowEvolution && typeof window !== "undefined") {
     const postSpecies =
       typeof evolution.postSpecies === "string" && evolution.postSpecies.trim()
         ? evolution.postSpecies.trim()
@@ -175,12 +180,40 @@ export function buildProfileColumn({ user, pet, evolution = null }) {
         ? evolution.postImage
         : stageDetail.image;
 
-    setTimeout(() => {
-      window.alert("Your Pokemon is evolving!?");
-      window.alert(`Congratulations, your pokemon has evolved into ${postSpecies}`);
-      avatar.setAttribute("src", postImage);
-      avatar.setAttribute("alt", `${postSpecies} avatar`);
-    }, 0);
+    const runEvolutionSequence = async () => {
+      const overlayParent =
+        typeof document !== "undefined" && typeof document.querySelector === "function"
+          ? document.querySelector("#app")
+          : null;
+
+      try {
+        await showEvolutionSequence({
+          parent: overlayParent ?? document.body,
+          postSpecies,
+        });
+      } catch (error) {
+        console.error("Failed to present the evolution prompt:", error);
+      } finally {
+        avatar.setAttribute("src", postImage);
+        avatar.setAttribute("alt", `${postSpecies} avatar`);
+      }
+    };
+
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          runEvolutionSequence().catch((error) => {
+            console.error("Evolution sequence errored:", error);
+          });
+        }, 0);
+      });
+    } else {
+      window.setTimeout(() => {
+        runEvolutionSequence().catch((error) => {
+          console.error("Evolution sequence errored:", error);
+        });
+      }, 0);
+    }
   }
 
   return column;

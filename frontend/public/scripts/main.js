@@ -7,7 +7,64 @@ import { resolveBackendURL, deleteTrainerPet } from "./services/api.js";
 import { displayMessages, resetState } from "./state.js";
 import { sanitizeIdentifier } from "./utils.js";
 import { showRunAwayPrompt } from "./ui/prompts.js";
-import { storeCachedUsername } from "./storage.js";
+import { clearCachedUsername, storeCachedUsername } from "./storage.js";
+
+const CURRENT_USER_BADGE_ID = "current-user-badge";
+
+function ensureCurrentUserBadge() {
+  if (!document || !document.body) {
+    return null;
+  }
+
+  let badge = document.getElementById(CURRENT_USER_BADGE_ID);
+
+  if (!badge) {
+    badge = createElement("div", {
+      className: "current-user-indicator is-hidden",
+      attributes: { id: CURRENT_USER_BADGE_ID },
+    });
+
+    document.body.appendChild(badge);
+  }
+
+  return badge;
+}
+
+function updateCurrentUserBadge(username, { visible = true } = {}) {
+  const badge = ensureCurrentUserBadge();
+
+  if (!badge) {
+    return;
+  }
+
+  const safeName = sanitizeIdentifier(username, "");
+
+  if (!safeName) {
+    badge.textContent = "";
+    badge.classList.add("is-hidden");
+    delete badge.dataset.username;
+    return;
+  }
+
+  badge.textContent = `Currently logged in as: ${safeName}`;
+  badge.dataset.username = safeName;
+
+  if (visible) {
+    badge.classList.remove("is-hidden");
+  } else {
+    badge.classList.add("is-hidden");
+  }
+}
+
+function hideCurrentUserBadge() {
+  const badge = ensureCurrentUserBadge();
+
+  if (!badge) {
+    return;
+  }
+
+  badge.classList.add("is-hidden");
+}
 
 async function initApp() {
   const appRoot = document.querySelector("#app");
@@ -19,6 +76,7 @@ async function initApp() {
 
   appRoot.innerHTML = "";
   resetState();
+  updateCurrentUserBadge("");
 
   const backendURL = await resolveBackendURL();
 
@@ -26,6 +84,7 @@ async function initApp() {
 
   try {
     user = await bootstrapUserSelection(appRoot, backendURL);
+    updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
   } catch (error) {
     console.error(error);
     const errorMessage = error instanceof Error ? error.message : "Failed to load the player profile.";
@@ -44,12 +103,55 @@ async function initApp() {
   try {
     adjustmentResult = await applyPetDailyAdjustments({ appRoot, backendURL, user });
     user = adjustmentResult.user;
+    updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
   } catch (error) {
     console.error("Failed to apply pet adjustments:", error);
   }
 
-  const activePet = adjustmentResult.pet ?? selectActivePet(user);
-  const evolutionDetail = adjustmentResult.evolution ?? null;
+  let activePet = adjustmentResult.pet ?? selectActivePet(user);
+  let evolutionDetail = adjustmentResult.evolution ?? null;
+  let pendingMessages = Array.isArray(adjustmentResult.messages)
+    ? adjustmentResult.messages
+    : [];
+
+  if (!activePet) {
+    try {
+      const refreshedUser = await promptForExistingTrainerPet(appRoot, backendURL, user.id);
+      storeCachedUsername(refreshedUser.id ?? user.id);
+      user = refreshedUser;
+      updateCurrentUserBadge(user?.id ?? user?.name ?? user?.username ?? "");
+      activePet = selectActivePet(user);
+      evolutionDetail = null;
+      pendingMessages = [];
+    } catch (error) {
+      console.error("Failed to create a new Pokémon for this trainer:", error);
+      const fallbackMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : "We couldn't create a Pokémon for you. Please try again.";
+
+      appRoot.innerHTML = "";
+      appRoot.appendChild(
+        createElement("div", {
+          className: "error-message",
+          textContent: fallbackMessage,
+        }),
+      );
+      return;
+    }
+
+    if (!activePet) {
+      console.error("Trainer record was refreshed but still has no Pokémon attached.");
+      appRoot.innerHTML = "";
+      appRoot.appendChild(
+        createElement("div", {
+          className: "error-message",
+          textContent: "We couldn't link a Pokémon to this trainer. Please try again.",
+        }),
+      );
+      return;
+    }
+  }
 
   async function handlePetRelease() {
     const currentPet = activePet ?? selectActivePet(user);
@@ -103,11 +205,24 @@ async function initApp() {
     }
 
     storeCachedUsername(refreshedUser.id ?? user.id);
+    updateCurrentUserBadge(refreshedUser?.id ?? user.id ?? "");
 
     try {
       await initApp();
     } catch (error) {
       console.error("Failed to reload the chat after releasing the Pokémon:", error);
+      throw error;
+    }
+  }
+
+  async function handleLogout() {
+    clearCachedUsername();
+    updateCurrentUserBadge("");
+
+    try {
+      await initApp();
+    } catch (error) {
+      console.error("Failed to return to the trainer selection screen:", error);
       throw error;
     }
   }
@@ -121,7 +236,7 @@ async function initApp() {
     message: `You are chatting as ${user.id}. ${introMessage}`,
   });
 
-  adjustmentResult.messages
+  pendingMessages
     .filter((entry) => entry && typeof entry.message === "string" && entry.message.trim())
     .forEach((entry) => {
       const senderLabel = sanitizeIdentifier(entry.sender, "System");
@@ -134,10 +249,12 @@ async function initApp() {
     backendURL,
     evolution: evolutionDetail,
     onPetReleased: handlePetRelease,
+    onLogout: handleLogout,
   });
 
   appRoot.innerHTML = "";
   appRoot.appendChild(root);
+  hideCurrentUserBadge();
 
   if (focusTarget) {
     focusTarget.focus();

@@ -1,6 +1,77 @@
 import { createElement } from "../dom.js";
 import { sanitizeIdentifier } from "../utils.js";
 
+function resolveOverlayHost(preferred) {
+  if (preferred) {
+    return preferred;
+  }
+
+  if (typeof document !== "undefined" && document.body) {
+    return document.body;
+  }
+
+  return null;
+}
+
+function presentOverlayMessage(parentNode, options = {}) {
+  const host = resolveOverlayHost(parentNode);
+
+  if (!host) {
+    return Promise.resolve();
+  }
+
+  const {
+    message = "",
+    buttonLabel = "Ok",
+    buttonAriaLabel = "Dismiss message",
+    buttonClassName = "",
+  } = options;
+
+  return new Promise((resolve) => {
+    const overlay = createElement("div", {
+      className: "prompt-overlay",
+    });
+
+    const card = createElement("div", {
+      className: "prompt-card prompt-card--overlay",
+      attributes: { role: "dialog", "aria-live": "assertive", "aria-modal": "true" },
+    });
+
+    const title = createElement("div", { className: "prompt-title", textContent: message });
+    const button = createElement("button", {
+      className: ["prompt-submit-button", buttonClassName].filter(Boolean).join(" "),
+      textContent: buttonLabel,
+      attributes: { type: "button", "aria-label": buttonAriaLabel },
+    });
+
+    const actions = createElement("div", {
+      className: "prompt-runaway-actions",
+      children: [button],
+    });
+
+    card.appendChild(title);
+    card.appendChild(actions);
+    overlay.appendChild(card);
+    host.appendChild(overlay);
+
+    const cleanup = () => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    };
+
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      cleanup();
+      resolve();
+    });
+
+    if (typeof button.focus === "function") {
+      button.focus();
+    }
+  });
+}
+
 function renderInputPrompt(appRoot, options) {
   const {
     lead,
@@ -49,15 +120,6 @@ function renderInputPrompt(appRoot, options) {
       input.value = initialValue;
     }
 
-    const clearButton = createElement("button", {
-      className: "prompt-clear-button",
-      textContent: "×",
-      attributes: {
-        type: "button",
-        "aria-label": "Clear input",
-      },
-    });
-
     const submitButton = createElement("button", {
       className: "prompt-submit-button",
       textContent: submitLabel,
@@ -68,7 +130,6 @@ function renderInputPrompt(appRoot, options) {
     });
 
     inputWrapper.appendChild(input);
-    inputWrapper.appendChild(clearButton);
     inputWrapper.appendChild(submitButton);
 
     const errorElement = createElement("div", {
@@ -94,20 +155,7 @@ function renderInputPrompt(appRoot, options) {
       }
     }
 
-    function updateClearButtonState() {
-      const hasValue = input.value.length > 0;
-      clearButton.disabled = !hasValue;
-    }
-
-    clearButton.addEventListener("click", () => {
-      input.value = "";
-      updateClearButtonState();
-      showError("");
-      input.focus();
-    });
-
     input.addEventListener("input", () => {
-      updateClearButtonState();
       if (!errorElement.classList.contains("is-hidden")) {
         showError("");
       }
@@ -124,13 +172,11 @@ function renderInputPrompt(appRoot, options) {
       }
 
       input.disabled = true;
-      clearButton.disabled = true;
       submitButton.disabled = true;
 
       resolve(trimmedValue);
     });
 
-    updateClearButtonState();
     input.focus();
   });
 }
@@ -138,7 +184,7 @@ function renderInputPrompt(appRoot, options) {
 export function promptForUsername(appRoot, { initialValue = "", errorMessage = "" } = {}) {
   return renderInputPrompt(appRoot, {
     title: "Enter username",
-    placeholder: "Value",
+    placeholder: "Enter your username..",
     initialValue,
     errorMessage,
     submitLabel: "→",
@@ -150,7 +196,7 @@ export function promptForPetName(appRoot, { initialValue = "", errorMessage = ""
   return renderInputPrompt(appRoot, {
     lead: "Looks like you currently don't own a Pokémon.",
     title: "Enter your new pokemon name",
-    placeholder: "Value",
+    placeholder: "Enter new Pokemon name..",
     initialValue,
     errorMessage,
     submitLabel: "→",
@@ -161,46 +207,36 @@ export function promptForPetName(appRoot, { initialValue = "", errorMessage = ""
 export function showRunAwayPrompt(appRoot, petName) {
   const safeName = sanitizeIdentifier(petName, "Your companion");
 
-  return new Promise((resolve) => {
+  if (appRoot) {
     appRoot.innerHTML = "";
+  }
 
-    const container = createElement("div", { className: "prompt-overlay" });
-    const card = createElement("div", { className: "prompt-card" });
+  return presentOverlayMessage(appRoot, {
+    message: `${safeName} has ran away.`,
+    buttonLabel: "Ok..",
+    buttonAriaLabel: "Acknowledge run away notice",
+    buttonClassName: "prompt-runaway-button",
+  });
+}
 
-    const title = createElement("div", {
-      className: "prompt-title",
-      textContent: `${safeName} has ran away.`,
-    });
+export async function showEvolutionSequence({ parent, postSpecies }) {
+  const overlayHost = resolveOverlayHost(parent);
 
-    const button = createElement("button", {
-      className: "prompt-submit-button",
-      textContent: "Ok..",
-      attributes: {
-        type: "button",
-        "aria-label": "Acknowledge run away notice",
-      },
-    });
+  if (!overlayHost) {
+    return;
+  }
 
-    const buttonWrapper = createElement("div", {
-      className: "prompt-input-wrapper",
-      children: [button],
-    });
+  await presentOverlayMessage(overlayHost, {
+    message: "Your Pokemon is evolving!?",
+    buttonLabel: "Continue",
+    buttonAriaLabel: "Continue evolution sequence",
+  });
 
-    card.appendChild(title);
-    card.appendChild(buttonWrapper);
-    container.appendChild(card);
-    appRoot.appendChild(container);
+  const safeSpecies = sanitizeIdentifier(postSpecies, "its next form");
 
-    button.addEventListener("click", () => {
-      button.disabled = true;
-
-      if (container.parentNode) {
-        container.parentNode.removeChild(container);
-      }
-
-      resolve();
-    });
-
-    button.focus();
+  await presentOverlayMessage(overlayHost, {
+    message: `Congratulations, your pokemon has evolved into ${safeSpecies}`,
+    buttonLabel: "Awesome!",
+    buttonAriaLabel: "Close evolution message",
   });
 }

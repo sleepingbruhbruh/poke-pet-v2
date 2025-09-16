@@ -229,7 +229,7 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
         console.error("First message update failed:", error);
       }
     }
-
+    
     try {
       const response = await requestChatCompletion(backendURL, requestMessages);
       const assistantText = extractAssistantMessage(response);
@@ -325,7 +325,6 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
   renderMessages(chatBox, displayMessages);
 
   updateControlStates();
-
   const chatColumn = createElement("div", {
     className: "chat-column",
     children: [chatWrapper],

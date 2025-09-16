@@ -80,6 +80,7 @@ export async function applyPetDailyAdjustments({ appRoot, backendURL, user }) {
     const refreshedPet = selectActivePet(refreshedUser);
 
     return { user: refreshedUser, pet: refreshedPet ?? null, messages: [], evolution: null };
+
   }
 
   if (dayDifference === 1) {

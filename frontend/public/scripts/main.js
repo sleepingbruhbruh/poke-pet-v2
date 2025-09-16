@@ -232,7 +232,6 @@ function extractAssistantMessage(response) {
   return null;
 }
 
-// Placeholder removed; profile data now loads directly from the backend.
 
 function sanitizeIdentifier(value, fallback = "") {
   if (typeof value === "string") {
@@ -924,6 +923,8 @@ async function initApp() {
     console.warn("App root element not found; cannot render chat UI.");
     return;
   }
+
+  appRoot.innerHTML = "";
 
   displayMessages.splice(0);
   conversationHistory.splice(0);

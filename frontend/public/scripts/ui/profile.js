@@ -14,7 +14,6 @@ function createInfoRow(label, value, options = {}) {
         textContent: value,
         attributes: valueAttributes,
       }),
-      createElement("span", { className: "info-value", textContent: value }),
     ],
   });
 }

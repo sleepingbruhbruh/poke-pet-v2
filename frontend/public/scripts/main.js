@@ -640,6 +640,8 @@ async function initApp() {
     return;
   }
 
+  const backendURL = await resolveBackendURL();
+
   const activePet = selectActivePet(user);
 
   if (activePet?.context) {

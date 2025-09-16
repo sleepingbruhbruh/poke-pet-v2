@@ -66,6 +66,45 @@ function hideCurrentUserBadge() {
   badge.classList.add("is-hidden");
 }
 
+const CURRENT_USER_BADGE_ID = "current-user-badge";
+
+function ensureCurrentUserBadge() {
+  if (!document || !document.body) {
+    return null;
+  }
+
+  let badge = document.getElementById(CURRENT_USER_BADGE_ID);
+
+  if (!badge) {
+    badge = createElement("div", {
+      className: "current-user-indicator is-hidden",
+      attributes: { id: CURRENT_USER_BADGE_ID },
+    });
+
+    document.body.appendChild(badge);
+  }
+
+  return badge;
+}
+
+function updateCurrentUserBadge(username) {
+  const badge = ensureCurrentUserBadge();
+
+  if (!badge) {
+    return;
+  }
+
+  const safeName = sanitizeIdentifier(username, "");
+
+  if (!safeName) {
+    badge.textContent = "";
+    badge.classList.add("is-hidden");
+    return;
+  }
+
+  badge.textContent = `Currently logged in as: ${safeName}`;
+  badge.classList.remove("is-hidden");
+}
 async function initApp() {
   const appRoot = document.querySelector("#app");
 

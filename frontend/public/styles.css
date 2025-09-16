@@ -33,6 +33,20 @@ body {
   text-align: right;
 }
 
+#current-user-badge,
+.current-user-indicator {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  font-size: 16px;
+  color: #6c6c6c;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  z-index: 1000;
+  pointer-events: none;
+  text-align: right;
+}
+
 #app {
   width: 100%;
   display: flex;
@@ -453,6 +467,34 @@ body {
   border-radius: 50%;
   font-size: 22px;
   line-height: 1;
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chat-actions .logout-button {
+  background: linear-gradient(135deg, #64b5f6 0%, #1976d2 100%);
+  color: #ffffff;
+}
+
+.chat-actions .logout-button:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(25, 118, 210, 0.35);
+}
+
+.chat-actions .let-go-button {
+  background: linear-gradient(135deg, #ff6b6b 0%, #c62828 100%);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.chat-actions .let-go-button:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(198, 40, 40, 0.35);
 }
 
 .error-message {

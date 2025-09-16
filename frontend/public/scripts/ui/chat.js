@@ -140,7 +140,6 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
 
   async function ensureFirstMessageUpdate() {
     if (hasUpdatedFirstMessage || !pet) {
-      hasUpdatedFirstMessage = true;
       return;
     }
 
@@ -171,9 +170,9 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased }) {
       const message = error instanceof Error && error.message ? error.message : fallbackMessage;
       appendMessage({ sender: "System", message }, chatBox, displayMessages);
       throw error;
-    } finally {
-      hasUpdatedFirstMessage = true;
     }
+
+    hasUpdatedFirstMessage = true;
 
     pet.lastChatted = isoNow;
 

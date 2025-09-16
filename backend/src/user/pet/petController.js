@@ -121,8 +121,42 @@ export const updatePet = async (req, res) => {
 
 /** @type {import("express").RequestHandler} */
 export const deletePet = async (req, res) => {
-  const { name, id } = req.params;
-  await User.findByIdAndUpdate(name, { $pull: { pets: { _id: id } }});
+  const { name, id } = req.params ?? {};
+  const sanitizedName =
+    typeof name === "string"
+      ? name.trim()
+      : name !== undefined && name !== null
+        ? String(name).trim()
+        : "";
+  const sanitizedId =
+    typeof id === "string"
+      ? id.trim()
+      : id !== undefined && id !== null
+        ? String(id).trim()
+        : "";
+
+  if (!sanitizedName || !sanitizedId) {
+    res.sendStatus(204);
+    return;
+  }
+
+  const user = await User.findById(sanitizedName).select("pets");
+
+  if (!user) {
+    res.sendStatus(204);
+    return;
+  }
+
+  const pet = user.pets.id(sanitizedId);
+
+  if (!pet) {
+    res.sendStatus(204);
+    return;
+  }
+
+  await pet.deleteOne();
+
+  await user.save();
 
   res.sendStatus(204);
 };

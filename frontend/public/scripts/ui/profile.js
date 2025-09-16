@@ -1,6 +1,11 @@
 import { createElement } from "../dom.js";
 import { getStageDetail, selectActivePet } from "../pets.js";
-import { clampFriendship, getTalkingStreakValue, sanitizeIdentifier } from "../utils.js";
+import {
+  clampFriendship,
+  getTalkingStreakValue,
+  resolveFriendshipTier,
+  sanitizeIdentifier,
+} from "../utils.js";
 
 function createInfoRow(label, value, options = {}) {
   const { valueAttributes = {} } = options;
@@ -34,8 +39,9 @@ function buildFriendshipSection(friendshipValue) {
     ],
   });
   const bar = createElement("div", { className: "friendship-bar" });
+  const tier = resolveFriendshipTier(clampedValue);
   const fill = createElement("div", {
-    className: "friendship-bar-fill",
+    className: `friendship-bar-fill friendship-${tier}`,
     attributes: { "data-info": "friendship-progress" },
   });
   fill.style.width = `${clampedValue}%`;

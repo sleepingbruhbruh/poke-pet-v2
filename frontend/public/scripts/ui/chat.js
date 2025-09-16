@@ -7,6 +7,7 @@ import {
   buildRoleplayPrompt,
   clampFriendship,
   formatConversationContext,
+  resolveFriendshipTier,
   sanitizeIdentifier,
 } from "../utils.js";
 
@@ -114,6 +115,13 @@ export function buildChatSection({ user, pet, backendURL, onPetReleased, onLogou
 
     if (friendshipProgressElement) {
       friendshipProgressElement.style.width = `${boundedFriendship}%`;
+      friendshipProgressElement.classList.remove(
+        "friendship-low",
+        "friendship-medium",
+        "friendship-high",
+      );
+      const tierClass = `friendship-${resolveFriendshipTier(boundedFriendship)}`;
+      friendshipProgressElement.classList.add(tierClass);
     }
   }
 

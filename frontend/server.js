@@ -1,12 +1,11 @@
 import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const placeholderPath = path.join(__dirname, "placeholder.json");
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const placeholderPath = path.join(currentDir, "placeholder.json");
 
 app.get("/placeholder.json", (_req, res) => {
   res.sendFile(placeholderPath);
